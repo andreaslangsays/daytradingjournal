@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --background: 220 17% 94%;
+  --foreground: 220 28% 16%;
+  --border: 218 17% 82%;
+  --input: 220 19% 86%;
+  --ring: 201 89% 46%;
+  --primary: 205 90% 45%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 18% 98%;
+  --secondary-foreground: 220 28% 16%;
+  --muted: 215 19% 90%;
+  --muted-foreground: 220 12% 40%;
+  --accent: 212 15% 88%;
+  --accent-foreground: 220 28% 16%;
+  --success: 152 59% 38%;
+  --danger: 0 68% 54%;
+  --card: 0 0% 100%;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: 221 28% 10%;
+  --foreground: 214 20% 94%;
+  --border: 217 16% 20%;
+  --input: 217 16% 20%;
+  --ring: 193 95% 68%;
+  --primary: 191 93% 60%;
+  --primary-foreground: 222 39% 8%;
+  --secondary: 220 21% 16%;
+  --secondary-foreground: 214 20% 94%;
+  --muted: 219 18% 16%;
+  --muted-foreground: 215 12% 66%;
+  --accent: 33 91% 62%;
+  --accent-foreground: 222 39% 8%;
+  --success: 154 71% 48%;
+  --danger: 0 84% 62%;
+  --card: 221 28% 11%;
+}
+
+body {
+  @apply min-h-screen bg-background text-foreground antialiased;
+  background-image:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.82), transparent 28%),
+    linear-gradient(180deg, #eef2f7 0%, #dde4eb 100%);
+}
+
+.dark body {
+  background-image:
+    radial-gradient(circle at top, rgba(0, 208, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, #0b1018 0%, #090d15 100%);
+}
+
+#root {
+  @apply min-h-screen;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(122, 142, 172, 0.4) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(122, 142, 172, 0.35);
+  border-radius: 9999px;
+}
+
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(245, 248, 252, 0.92) 100%);
+  backdrop-filter: blur(10px);
+}
+
+.dark .glass {
+  background: linear-gradient(180deg, rgba(28, 34, 47, 0.96) 0%, rgba(17, 22, 33, 0.9) 100%);
+  backdrop-filter: blur(14px);
+}
