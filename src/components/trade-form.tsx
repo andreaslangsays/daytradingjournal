@@ -1,8 +1,9 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import type { PendingScreenshot, TradeRecord, TradeTag } from "@/lib/types";
+import { readTradeImageBytes } from "@/lib/tauri";
+import type { Instrument, InstrumentFeePresets, PendingScreenshot, TradeFormSubmission, TradeRecord, TradeTag } from "@/lib/types";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -20,19 +21,26 @@ const moodColors: Record<string, string> = {
 
 interface TradeFormProps {
   initialTrade?: TradeRecord | null;
-  onSubmit: (trade: Partial<TradeRecord>) => Promise<TradeRecord>;
+  onSubmit: (payload: TradeFormSubmission) => Promise<TradeRecord>;
   availableTags: TradeTag[];
-  onAttachScreenshots: (tradeId: string, screenshots: PendingScreenshot[]) => Promise<void>;
-  onAttachSessionScreenshots: (sessionId: string, screenshots: PendingScreenshot[]) => Promise<void>;
+  feePresets: InstrumentFeePresets;
 }
 
-export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScreenshots, onAttachSessionScreenshots }: TradeFormProps) {
+interface ExistingScreenshot {
+  id: string;
+  previewUrl: string;
+  description: string;
+}
+
+export function TradeForm({ initialTrade, onSubmit, availableTags, feePresets }: TradeFormProps) {
   const { copy } = useI18n();
   const [form, setForm] = useState<Partial<TradeRecord>>({
     sessionId: `${new Date().toISOString().slice(0, 10)}-01`,
+    account: "",
     instrument: "ES",
     side: "LONG",
     contracts: 1,
+    commission: 0,
     mood: "🙂",
     tags: [],
     entryTimestamp: new Date().toISOString().slice(0, 16),
@@ -40,8 +48,24 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
   });
   const [screenshots, setScreenshots] = useState<PendingScreenshot[]>([]);
   const [sessionScreenshots, setSessionScreenshots] = useState<PendingScreenshot[]>([]);
+  const [existingTradeScreenshots, setExistingTradeScreenshots] = useState<ExistingScreenshot[]>([]);
+  const [existingSessionScreenshots, setExistingSessionScreenshots] = useState<ExistingScreenshot[]>([]);
+  const [removedTradeImageIds, setRemovedTradeImageIds] = useState<string[]>([]);
+  const [removedSessionImageIds, setRemovedSessionImageIds] = useState<string[]>([]);
+  const objectUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
+    screenshots.forEach((shot) => URL.revokeObjectURL(shot.previewUrl));
+    sessionScreenshots.forEach((shot) => URL.revokeObjectURL(shot.previewUrl));
+    objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    objectUrlsRef.current = [];
+    setScreenshots([]);
+    setSessionScreenshots([]);
+    setExistingTradeScreenshots([]);
+    setExistingSessionScreenshots([]);
+    setRemovedTradeImageIds([]);
+    setRemovedSessionImageIds([]);
+
     if (!initialTrade) {
       return;
     }
@@ -52,10 +76,57 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
       entryTimestamp: initialTrade.entryTimestamp?.slice(0, 16),
       exitTimestamp: initialTrade.exitTimestamp?.slice(0, 16),
     });
+
+    void (async () => {
+      const [tradeShots, sessionShots] = await Promise.all([
+        Promise.all(
+          initialTrade.images.map(async (image) => {
+            const bytes = await readTradeImageBytes(image.relativePath);
+            const previewUrl = URL.createObjectURL(new Blob([Uint8Array.from(bytes)]));
+            objectUrlsRef.current.push(previewUrl);
+            return { id: image.id, previewUrl, description: image.description ?? "" } satisfies ExistingScreenshot;
+          }),
+        ),
+        Promise.all(
+          initialTrade.sessionImages.map(async (image) => {
+            const bytes = await readTradeImageBytes(image.relativePath);
+            const previewUrl = URL.createObjectURL(new Blob([Uint8Array.from(bytes)]));
+            objectUrlsRef.current.push(previewUrl);
+            return { id: image.id, previewUrl, description: image.description ?? "" } satisfies ExistingScreenshot;
+          }),
+        ),
+      ]);
+
+      setExistingTradeScreenshots(tradeShots);
+      setExistingSessionScreenshots(sessionShots);
+    })();
+    return () => {
+      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      objectUrlsRef.current = [];
+    };
   }, [initialTrade]);
 
   const updateField = (key: keyof TradeRecord, value: unknown) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleInstrumentChange = (nextInstrument: Instrument) => {
+    setForm((current) => {
+      const previousInstrument = current.instrument as Instrument | undefined;
+      const previousPreset = previousInstrument ? feePresets[previousInstrument] ?? 0 : 0;
+      const nextPreset = feePresets[nextInstrument] ?? 0;
+      const shouldApplyPreset =
+        !initialTrade ||
+        current.commission == null ||
+        current.commission === 0 ||
+        current.commission === previousPreset;
+
+      return {
+        ...current,
+        instrument: nextInstrument,
+        commission: shouldApplyPreset ? nextPreset : current.commission,
+      };
+    });
   };
 
   const appendFiles = async (items: Array<{ bytes: number[]; fileName?: string }>, kind: "trade" | "session") => {
@@ -80,6 +151,7 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
 
   const selectFiles = async (kind: "trade" | "session") => {
     const selected = await open({
+      title: copy.tradeForm.selectFilesTitle,
       multiple: true,
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
     });
@@ -134,6 +206,55 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
     }
   };
 
+  const removeExistingScreenshot = (id: string, kind: "trade" | "session") => {
+    if (kind === "trade") {
+      setExistingTradeScreenshots((current) => current.filter((item) => item.id !== id));
+      setRemovedTradeImageIds((current) => [...current, id]);
+      return;
+    }
+    setExistingSessionScreenshots((current) => current.filter((item) => item.id !== id));
+    setRemovedSessionImageIds((current) => [...current, id]);
+  };
+
+  const buildSubmitPayload = (): Partial<TradeRecord> => {
+    const payload: Partial<TradeRecord> = { ...form };
+    if (!initialTrade) {
+      return payload;
+    }
+
+    const affectsDerivedValues =
+      payload.side !== initialTrade.side ||
+      payload.entryPrice !== initialTrade.entryPrice ||
+      payload.exitPrice !== initialTrade.exitPrice ||
+      payload.contracts !== initialTrade.contracts ||
+      payload.stopLoss !== initialTrade.stopLoss ||
+      payload.entryTimestamp !== initialTrade.entryTimestamp?.slice(0, 16) ||
+      payload.exitTimestamp !== initialTrade.exitTimestamp?.slice(0, 16);
+
+    if (affectsDerivedValues) {
+      delete payload.grossPnl;
+      delete payload.netPnl;
+      delete payload.rMultiple;
+      delete payload.holdMinutes;
+    }
+
+    return payload;
+  };
+
+  const handleSubmit = async () => {
+    await onSubmit({
+      trade: buildSubmitPayload(),
+      newTradeScreenshots: screenshots,
+      newSessionScreenshots: sessionScreenshots,
+      removedTradeImageIds,
+      removedSessionImageIds,
+    });
+    screenshots.forEach((shot) => URL.revokeObjectURL(shot.previewUrl));
+    sessionScreenshots.forEach((shot) => URL.revokeObjectURL(shot.previewUrl));
+    setScreenshots([]);
+    setSessionScreenshots([]);
+  };
+
   return (
     <div className="grid gap-4 2xl:grid-cols-[1.22fr_0.98fr]">
       <Card className="shadow-none">
@@ -146,12 +267,19 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
         <CardContent className="grid gap-4">
           <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
             <Field label={copy.tradeForm.instrument}>
-              <Select value={form.instrument} onChange={(event) => updateField("instrument", event.target.value)}>
+              <Select value={form.instrument} onChange={(event) => handleInstrumentChange(event.target.value as Instrument)}>
                 <option value="ES">ES</option>
                 <option value="NQ">NQ</option>
+                <option value="MES">MES</option>
+                <option value="MNQ">MNQ</option>
                 <option value="CL">CL</option>
+                <option value="MCL">MCL</option>
+                <option value="BTCUS">BTCUS</option>
                 <option value="CUSTOM">{copy.tradeForm.custom}</option>
               </Select>
+            </Field>
+            <Field label="Konto">
+              <Input value={form.account ?? ""} onChange={(event) => updateField("account", event.target.value)} />
             </Field>
             <Field label={copy.tradeForm.side}>
               <Select value={form.side} onChange={(event) => updateField("side", event.target.value)}>
@@ -164,6 +292,9 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
             </Field>
             <Field label={copy.tradeForm.contracts}>
               <Input type="number" value={form.contracts ?? 1} onChange={(event) => updateField("contracts", Number(event.target.value))} />
+            </Field>
+            <Field label="Gebühren">
+              <Input type="number" value={form.commission ?? 0} onChange={(event) => updateField("commission", Number(event.target.value))} />
             </Field>
             <Field label={copy.tradeForm.entryPrice}>
               <Input type="number" value={form.entryPrice ?? ""} onChange={(event) => updateField("entryPrice", Number(event.target.value))} />
@@ -238,21 +369,7 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
           </Field>
 
           <div className="flex justify-end">
-            <Button
-              onClick={async () => {
-                const savedTrade = await onSubmit(form);
-                if (savedTrade.id && screenshots.length > 0) {
-                  await onAttachScreenshots(savedTrade.id, screenshots);
-                  screenshots.forEach((shot) => URL.revokeObjectURL(shot.previewUrl));
-                  setScreenshots([]);
-                }
-                if (savedTrade.sessionId && sessionScreenshots.length > 0) {
-                  await onAttachSessionScreenshots(savedTrade.sessionId, sessionScreenshots);
-                  sessionScreenshots.forEach((shot) => URL.revokeObjectURL(shot.previewUrl));
-                  setSessionScreenshots([]);
-                }
-              }}
-            >
+            <Button onClick={() => void handleSubmit()}>
               {initialTrade ? copy.tradeForm.updateTrade : copy.tradeForm.saveTrade}
             </Button>
           </div>
@@ -269,6 +386,7 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
           addLabel={copy.tradeForm.addFromFiles}
           removeLabel={copy.tradeForm.removeImage}
           descriptionLabel={copy.tradeForm.imageDescription}
+          existingScreenshots={existingTradeScreenshots}
           screenshots={screenshots}
           kind="trade"
           onPaste={handlePaste}
@@ -277,6 +395,7 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
             setScreenshots((current) => current.map((item) => (item.id === id ? { ...item, description: value } : item)))
           }
           onRemove={(id) => removeScreenshot(id, "trade")}
+          onRemoveExisting={(id) => removeExistingScreenshot(id, "trade")}
         />
 
         <ScreenshotCard
@@ -288,6 +407,7 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
           addLabel={copy.tradeForm.addFromFiles}
           removeLabel={copy.tradeForm.removeImage}
           descriptionLabel={copy.tradeForm.imageDescription}
+          existingScreenshots={existingSessionScreenshots}
           screenshots={sessionScreenshots}
           kind="session"
           onPaste={handlePaste}
@@ -296,6 +416,7 @@ export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScree
             setSessionScreenshots((current) => current.map((item) => (item.id === id ? { ...item, description: value } : item)))
           }
           onRemove={(id) => removeScreenshot(id, "session")}
+          onRemoveExisting={(id) => removeExistingScreenshot(id, "session")}
         />
       </div>
     </div>
@@ -311,12 +432,14 @@ function ScreenshotCard({
   addLabel,
   removeLabel,
   descriptionLabel,
+  existingScreenshots,
   screenshots,
   kind,
   onPaste,
   onSelectFiles,
   onDescriptionChange,
   onRemove,
+  onRemoveExisting,
 }: {
   title: string;
   eyebrow: string;
@@ -326,12 +449,14 @@ function ScreenshotCard({
   addLabel: string;
   removeLabel: string;
   descriptionLabel: string;
+  existingScreenshots: ExistingScreenshot[];
   screenshots: PendingScreenshot[];
   kind: "trade" | "session";
   onPaste: (kind: "trade" | "session") => React.ClipboardEventHandler<HTMLDivElement>;
   onSelectFiles: (kind: "trade" | "session") => Promise<void>;
   onDescriptionChange: (id: string, value: string) => void;
   onRemove: (id: string) => void;
+  onRemoveExisting: (id: string) => void;
 }) {
   return (
     <Card className="border border-border/80 bg-secondary/40 shadow-none">
@@ -356,7 +481,26 @@ function ScreenshotCard({
           </div>
         </div>
 
-        {screenshots.length === 0 ? <p className="text-xs text-muted-foreground">{emptyLabel}</p> : null}
+        {existingScreenshots.length === 0 && screenshots.length === 0 ? <p className="text-xs text-muted-foreground">{emptyLabel}</p> : null}
+
+        {existingScreenshots.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Bereits verknüpft</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {existingScreenshots.map((shot) => (
+                <div key={shot.id} className="rounded-[5px] border border-border/80 bg-background/45 p-3">
+                  <img src={shot.previewUrl} alt="Existing screenshot" className="h-36 w-full rounded-[5px] object-cover" />
+                  {shot.description ? <p className="mt-2 text-xs text-muted-foreground">{shot.description}</p> : null}
+                  <Button type="button" variant="ghost" className="mt-2 px-0" onClick={() => onRemoveExisting(shot.id)}>
+                    {removeLabel}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {screenshots.length > 0 ? <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Wird beim Speichern hinzugefügt</p> : null}
 
         <div className="grid gap-3 md:grid-cols-2">
           {screenshots.map((shot) => (

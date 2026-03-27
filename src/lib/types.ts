@@ -1,5 +1,6 @@
-export type Instrument = "ES" | "NQ" | "CL" | "CUSTOM";
+export type Instrument = "ES" | "NQ" | "MES" | "MNQ" | "CL" | "MCL" | "BTCUS" | "CUSTOM";
 export type Side = "LONG" | "SHORT";
+export type InstrumentFeePresets = Partial<Record<Instrument, number>>;
 
 export interface TradeImage {
   id: string;
@@ -17,6 +18,7 @@ export interface TradeTag {
 export interface TradeRecord {
   id: string;
   sessionId: string;
+  account: string;
   instrument: Instrument;
   customInstrument?: string | null;
   side: Side;
@@ -29,10 +31,12 @@ export interface TradeRecord {
   takeProfit?: number | null;
   grossPnl: number;
   netPnl: number;
+  commission: number;
   rMultiple: number;
   mae?: number | null;
   mfe?: number | null;
   holdMinutes: number;
+  executionCount: number;
   mood: string;
   setupDescription: string;
   tags: string[];
@@ -79,4 +83,12 @@ export interface PendingScreenshot {
   previewUrl: string;
   description: string;
   fileName?: string;
+}
+
+export interface TradeFormSubmission {
+  trade: Partial<TradeRecord>;
+  newTradeScreenshots: PendingScreenshot[];
+  newSessionScreenshots: PendingScreenshot[];
+  removedTradeImageIds: string[];
+  removedSessionImageIds: string[];
 }

@@ -1,29 +1,15 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import type { CsvMapping, CsvPreview } from "@/lib/types";
+import type { CsvPreview } from "@/lib/types";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
-import { Select } from "./ui/select";
-
-const internalFields = [
-  "entry_timestamp",
-  "exit_timestamp",
-  "instrument",
-  "side",
-  "entry_price",
-  "exit_price",
-  "contracts",
-  "stop_loss",
-  "take_profit",
-  "setup_description",
-  "tags",
-];
 
 interface CsvPanelProps {
   preview: CsvPreview | null;
   onPreview: (path: string) => Promise<void>;
-  onImport: (path: string, mapping: CsvMapping) => Promise<void>;
+  onImport: (path: string) => Promise<void>;
   onExport: (path: string) => Promise<void>;
 }
 
@@ -31,7 +17,18 @@ export function CsvPanel({ preview, onPreview, onImport, onExport }: CsvPanelPro
   const { copy } = useI18n();
   const [csvPath, setCsvPath] = useState("");
   const [exportPath, setExportPath] = useState("journal-export.csv");
-  const [mapping, setMapping] = useState<CsvMapping>({});
+
+  const chooseImportFile = async () => {
+    const selected = await open({
+      title: copy.csv.selectImportFile,
+      multiple: false,
+      filters: [{ name: "ATAS Excel", extensions: ["xlsx"] }],
+    });
+    if (!selected || Array.isArray(selected)) {
+      return;
+    }
+    setCsvPath(selected);
+  };
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
@@ -43,26 +40,18 @@ export function CsvPanel({ preview, onPreview, onImport, onExport }: CsvPanelPro
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Input value={csvPath} onChange={(event) => setCsvPath(event.target.value)} placeholder={copy.csv.importPlaceholder} />
+          <div className="flex gap-2">
+            <Input value={csvPath} onChange={(event) => setCsvPath(event.target.value)} placeholder={copy.csv.importPlaceholder} />
+            <Button variant="secondary" onClick={() => void chooseImportFile()}>{copy.csv.selectImportFile}</Button>
+          </div>
+          <p className="text-sm text-muted-foreground">{copy.csv.importHint}</p>
           <Button onClick={() => onPreview(csvPath)}>{copy.csv.loadPreview}</Button>
           {preview ? (
             <div className="space-y-4">
-              <div className="grid gap-3">
-                {internalFields.map((field) => (
-                  <label key={field} className="grid gap-2">
-                    <span className="text-sm text-muted-foreground">{field}</span>
-                    <Select value={mapping[field] ?? ""} onChange={(event) => setMapping((current) => ({ ...current, [field]: event.target.value }))}>
-                      <option value="">{copy.csv.ignore}</option>
-                      {preview.headers.map((header) => (
-                        <option key={header} value={header}>
-                          {header}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-                ))}
+              <div className="rounded-[5px] border border-border/80 bg-background/50 px-3 py-2 text-sm text-muted-foreground">
+                {copy.csv.importMode}
               </div>
-              <Button variant="accent" onClick={() => onImport(csvPath, mapping)}>
+              <Button variant="accent" onClick={() => onImport(csvPath)}>
                 {copy.csv.importRows}
               </Button>
             </div>

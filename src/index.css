@@ -4,42 +4,42 @@
 
 :root {
   color-scheme: light;
-  --background: 220 17% 94%;
+  --background: 45 23% 97%;
   --foreground: 220 28% 16%;
-  --border: 218 17% 82%;
+  --border: 42 12% 88%;
   --input: 220 19% 86%;
   --ring: 201 89% 46%;
   --primary: 205 90% 45%;
   --primary-foreground: 210 40% 98%;
-  --secondary: 210 18% 98%;
+  --secondary: 42 20% 95%;
   --secondary-foreground: 220 28% 16%;
-  --muted: 215 19% 90%;
+  --muted: 42 14% 93%;
   --muted-foreground: 220 12% 40%;
-  --accent: 212 15% 88%;
+  --accent: 42 16% 90%;
   --accent-foreground: 220 28% 16%;
   --success: 152 59% 38%;
   --danger: 0 68% 54%;
-  --card: 0 0% 100%;
+  --card: 45 25% 96%;
 }
 
 .dark {
   color-scheme: dark;
-  --background: 221 28% 10%;
+  --background: 240 4% 9%;
   --foreground: 214 20% 94%;
-  --border: 217 16% 20%;
-  --input: 217 16% 20%;
+  --border: 240 4% 16%;
+  --input: 240 4% 16%;
   --ring: 193 95% 68%;
   --primary: 191 93% 60%;
   --primary-foreground: 222 39% 8%;
-  --secondary: 220 21% 16%;
+  --secondary: 240 4% 13%;
   --secondary-foreground: 214 20% 94%;
-  --muted: 219 18% 16%;
+  --muted: 240 4% 12%;
   --muted-foreground: 215 12% 66%;
   --accent: 33 91% 62%;
   --accent-foreground: 222 39% 8%;
   --success: 154 71% 48%;
   --danger: 0 84% 62%;
-  --card: 221 28% 11%;
+  --card: 240 4% 10%;
 }
 
 body {
@@ -47,19 +47,15 @@ body {
   font-size: 13px;
   font-feature-settings: "tnum" 1, "cv02" 1, "cv03" 1, "cv04" 1;
   font-variant-numeric: tabular-nums;
-  background-image:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.48), transparent 24%),
-    linear-gradient(180deg, #eef1f4 0%, #e4e8ed 100%);
-}
-
-.dark body {
-  background-image:
-    radial-gradient(circle at top, rgba(0, 208, 255, 0.06), transparent 22%),
-    linear-gradient(180deg, #0d1117 0%, #0a0e14 100%);
+  background: #faf7f2;
 }
 
 #root {
   @apply min-h-screen;
+}
+
+.dark body {
+  background: #121212;
 }
 
 * {
@@ -75,22 +71,6 @@ body {
 ::-webkit-scrollbar-thumb {
   background: rgba(122, 142, 172, 0.35);
   border-radius: 9999px;
-}
-
-.glass {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(247, 249, 252, 0.88) 100%);
-  backdrop-filter: blur(6px);
-}
-
-.dark .glass {
-  background: linear-gradient(180deg, rgba(24, 28, 36, 0.96) 0%, rgba(16, 20, 27, 0.92) 100%);
-  backdrop-filter: blur(10px);
-}
-
-.terminal-sidebar {
-  background:
-    linear-gradient(180deg, rgba(16, 20, 27, 0.98) 0%, rgba(11, 15, 21, 0.98) 100%),
-    linear-gradient(180deg, rgba(0, 208, 255, 0.06), transparent 40%);
 }
 
 .metric-value {

@@ -14,6 +14,7 @@ export function Dashboard({ trades, variant = "stats" }: { trades: TradeRecord[]
   const [monthFilter, setMonthFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [instrumentFilter, setInstrumentFilter] = useState("");
+  const [accountFilter, setAccountFilter] = useState("");
 
   const filterOptions = useMemo(() => {
     const sessions = Array.from(new Set(trades.map((trade) => trade.sessionId))).filter(Boolean).sort();
@@ -21,7 +22,8 @@ export function Dashboard({ trades, variant = "stats" }: { trades: TradeRecord[]
     const months = Array.from(new Set(trades.map((trade) => trade.entryTimestamp.slice(0, 7)))).sort();
     const tags = Array.from(new Set(trades.flatMap((trade) => trade.tags))).sort();
     const instruments = Array.from(new Set(trades.map((trade) => trade.instrument))).sort();
-    return { sessions, days, months, tags, instruments };
+    const accounts = Array.from(new Set(trades.map((trade) => trade.account).filter(Boolean))).sort();
+    return { sessions, days, months, tags, instruments, accounts };
   }, [trades]);
 
   const filteredTrades = useMemo(
@@ -32,9 +34,10 @@ export function Dashboard({ trades, variant = "stats" }: { trades: TradeRecord[]
         const matchesMonth = !monthFilter || trade.entryTimestamp.slice(0, 7) === monthFilter;
         const matchesTag = !tagFilter || trade.tags.includes(tagFilter);
         const matchesInstrument = !instrumentFilter || trade.instrument === instrumentFilter;
-        return matchesSession && matchesDay && matchesMonth && matchesTag && matchesInstrument;
+        const matchesAccount = !accountFilter || trade.account === accountFilter;
+        return matchesSession && matchesDay && matchesMonth && matchesTag && matchesInstrument && matchesAccount;
       }),
-    [dayFilter, instrumentFilter, monthFilter, sessionFilter, tagFilter, trades],
+    [accountFilter, dayFilter, instrumentFilter, monthFilter, sessionFilter, tagFilter, trades],
   );
 
   const metrics = useMemo(() => buildMetrics(filteredTrades), [filteredTrades]);
@@ -59,12 +62,13 @@ export function Dashboard({ trades, variant = "stats" }: { trades: TradeRecord[]
           </div>
           <Badge>{filteredTrades.length} {copy.dashboard.tradesBadge}</Badge>
         </CardHeader>
-        <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+        <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
           <FilterSelect value={sessionFilter} onChange={setSessionFilter} placeholder={copy.dashboard.filterSession} options={filterOptions.sessions} />
           <FilterSelect value={dayFilter} onChange={setDayFilter} placeholder={copy.dashboard.filterDay} options={filterOptions.days} />
           <FilterSelect value={monthFilter} onChange={setMonthFilter} placeholder={copy.dashboard.filterMonth} options={filterOptions.months} />
           <FilterSelect value={tagFilter} onChange={setTagFilter} placeholder={copy.dashboard.filterTag} options={filterOptions.tags} />
           <FilterSelect value={instrumentFilter} onChange={setInstrumentFilter} placeholder={copy.dashboard.filterInstrument} options={filterOptions.instruments} />
+          <FilterSelect value={accountFilter} onChange={setAccountFilter} placeholder="Konto" options={filterOptions.accounts} />
         </CardContent>
       </Card>
 

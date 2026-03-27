@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.4 - 2026-03-27
+
+### Added
+- Comprehensive README with architecture, ATAS import notes, troubleshooting and release workflow.
+- Cross-platform build instructions for macOS, Windows 11 and Linux.
+- Persistent instrument fee presets in Settings for new manual trade capture.
+- ATAS import enrichment with account, commission and execution count data from `Executions`.
+
+### Changed
+- README expanded into a full project and operations guide.
+- Trade model, import pipeline and export output extended with account and fee-related metadata.
+- Fullscreen trade lightbox reworked into a fixed three-zone layout for zero-jump navigation.
+- Sidebar interaction spacing refined to keep the active marker from colliding with labels.
+
+### Fixed
+- Data persistence mismatch between frontend trade fields and backend schema for account, commission and execution count.
+
 ## 0.1.3 - 2026-03-27
 
 ### Added

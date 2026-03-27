@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Moon, RefreshCw, Sun } from "lucide-react";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { AppShell } from "./components/app-shell";
 import { CsvPanel } from "./components/csv-panel";
 import { Dashboard } from "./components/dashboard";
@@ -9,8 +10,8 @@ import { TradeHistory } from "./components/trade-history";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { getDictionary, I18nContext } from "./lib/i18n";
-import { addSessionScreenshotBytes, addTradeScreenshotBytes, clearJournal, deleteTagDefinition, executeCsvImport, exportCsv, getAppPreferences, listTagDefinitions, listTrades, openJournal, previewCsvImport, saveAppPreferences, saveJournal, saveTagDefinition, saveTrade } from "./lib/tauri";
-import type { AppPreferences, CsvPreview, LanguageCode, PendingScreenshot, ThemeMode, TradeRecord, TradeTag } from "./lib/types";
+import { addSessionScreenshotBytes, addTradeScreenshotBytes, clearJournal, deleteSessionImage, deleteTagDefinition, deleteTradeImage, executeAtasImport, exportCsv, getAppPreferences, getInstrumentFeePresets, listTagDefinitions, listTrades, openJournalFromPath, previewAtasImport, saveAppPreferences, saveInstrumentFeePresets, saveJournalToPath, saveTagDefinition, saveTrade } from "./lib/tauri";
+import type { AppPreferences, CsvPreview, InstrumentFeePresets, LanguageCode, PendingScreenshot, ThemeMode, TradeFormSubmission, TradeRecord, TradeTag } from "./lib/types";
 
 const defaultPreferences: AppPreferences = {
   language: "de",
@@ -25,8 +26,10 @@ export default function App() {
   const [trades, setTrades] = useState<TradeRecord[]>([]);
   const [editingTrade, setEditingTrade] = useState<TradeRecord | null>(null);
   const [tags, setTags] = useState<TradeTag[]>([]);
+  const [feePresets, setFeePresets] = useState<InstrumentFeePresets>({});
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
   const [currentJournal, setCurrentJournal] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -51,8 +54,10 @@ export default function App() {
           getAppPreferences(),
           listTagDefinitions(),
         ]);
+        const presetRows = await getInstrumentFeePresets();
         setTrades(tradeRows);
         setTags(tagRows);
+        setFeePresets(presetRows);
         setLanguageState(savedPreferences.language);
         setThemeState(savedPreferences.theme as ThemeMode);
         setActiveTab(savedPreferences.activeTab === "analysis" ? "dashboard" : savedPreferences.activeTab);
@@ -70,30 +75,30 @@ export default function App() {
     void saveAppPreferences(preferences);
   }, [hydrated, language, preferences, theme]);
 
-  const handleSaveTrade = async (payload: Partial<TradeRecord>) => {
-    const savedTrade = await saveTrade(payload);
+  useEffect(() => {
+    if (!statusMessage) {
+      setStatusMessage(dictionary.app.statusReady);
+    }
+  }, [dictionary.app.statusReady, statusMessage]);
+
+  const handleSaveTrade = async ({ trade, newTradeScreenshots, newSessionScreenshots, removedTradeImageIds, removedSessionImageIds }: TradeFormSubmission) => {
+    const savedTrade = await saveTrade(trade);
+
+    await Promise.all([
+      ...removedTradeImageIds.map((imageId) => deleteTradeImage(imageId)),
+      ...removedSessionImageIds.map((imageId) => deleteSessionImage(imageId)),
+      ...newTradeScreenshots.map((shot) =>
+        addTradeScreenshotBytes(savedTrade.id, shot.bytes, shot.description || undefined, shot.fileName),
+      ),
+      ...newSessionScreenshots.map((shot) =>
+        addSessionScreenshotBytes(savedTrade.sessionId, shot.bytes, shot.description || undefined, shot.fileName),
+      ),
+    ]);
+
     await refresh();
     setEditingTrade(null);
     setActiveTab("trades");
     return savedTrade;
-  };
-
-  const handleAttachScreenshots = async (tradeId: string, screenshots: PendingScreenshot[]) => {
-    await Promise.all(
-      screenshots.map((shot) =>
-        addTradeScreenshotBytes(tradeId, shot.bytes, shot.description || undefined, shot.fileName),
-      ),
-    );
-    await refresh();
-  };
-
-  const handleAttachSessionScreenshots = async (sessionId: string, screenshots: PendingScreenshot[]) => {
-    await Promise.all(
-      screenshots.map((shot) =>
-        addSessionScreenshotBytes(sessionId, shot.bytes, shot.description || undefined, shot.fileName),
-      ),
-    );
-    await refresh();
   };
 
   const setLanguage = (nextLanguage: LanguageCode) => {
@@ -109,6 +114,54 @@ export default function App() {
       setEditingTrade(null);
     }
     setActiveTab(tab);
+  };
+
+  const handleOpenJournal = async () => {
+    try {
+      const selected = await open({
+        title: dictionary.app.openJournalTitle,
+        multiple: false,
+        filters: [{ name: "Trader Journal", extensions: ["trj"] }],
+      });
+      if (!selected || Array.isArray(selected)) {
+        setStatusMessage(dictionary.app.statusReady);
+        return;
+      }
+      const path = await openJournalFromPath(selected);
+      if (!path) {
+        setStatusMessage(dictionary.app.statusReady);
+        return;
+      }
+      setCurrentJournal(path.split(/[\\/]/).pop() || path);
+      setStatusMessage(dictionary.app.statusJournalLoaded);
+      await refresh();
+    } catch (error) {
+      console.error("Failed to open journal", error);
+      setStatusMessage(`${dictionary.app.statusOpenFailed}: ${String(error)}`);
+    }
+  };
+
+  const handleSaveJournal = async () => {
+    try {
+      const selected = await save({
+        title: dictionary.app.saveJournalTitle,
+        filters: [{ name: "Trader Journal", extensions: ["trj"] }],
+      });
+      if (!selected) {
+        setStatusMessage(dictionary.app.statusReady);
+        return;
+      }
+      const path = await saveJournalToPath(selected);
+      if (!path) {
+        setStatusMessage(dictionary.app.statusReady);
+        return;
+      }
+      setCurrentJournal(path.split(/[\\/]/).pop() || path);
+      setStatusMessage(dictionary.app.statusJournalSaved);
+    } catch (error) {
+      console.error("Failed to save journal", error);
+      setStatusMessage(`${dictionary.app.statusSaveFailed}: ${String(error)}`);
+    }
   };
 
   return (
@@ -127,28 +180,16 @@ export default function App() {
         currentJournal={currentJournal || dictionary.app.defaultJournal}
         tradeCount={trades.length}
         sessionCount={sessionCount}
+        statusMessage={statusMessage || dictionary.app.statusReady}
         topBarActions={
           <div className="flex items-center gap-1.5">
             <Button variant="secondary" onClick={toggleTheme}>
               {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
             </Button>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                const path = await openJournal();
-                setCurrentJournal(path.split(/[\\/]/).pop() || path);
-                await refresh();
-              }}
-            >
+            <Button variant="secondary" onClick={() => void handleOpenJournal()}>
               {dictionary.app.openJournal}
             </Button>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                const path = await saveJournal();
-                setCurrentJournal(path.split(/[\\/]/).pop() || path);
-              }}
-            >
+            <Button variant="secondary" onClick={() => void handleSaveJournal()}>
               {dictionary.app.saveJournal}
             </Button>
             <Button onClick={() => void refresh()}>
@@ -180,8 +221,7 @@ export default function App() {
             initialTrade={editingTrade}
             onSubmit={handleSaveTrade}
             availableTags={tags}
-            onAttachScreenshots={handleAttachScreenshots}
-            onAttachSessionScreenshots={handleAttachSessionScreenshots}
+            feePresets={feePresets}
           />
         ) : null}
         {activeTab === "stats" ? <Dashboard trades={trades} variant="stats" /> : null}
@@ -206,12 +246,17 @@ export default function App() {
                 await refresh();
                 setActiveTab("dashboard");
               }}
+              feePresets={feePresets}
+              onSaveFeePresets={async (presets) => {
+                const saved = await saveInstrumentFeePresets(presets);
+                setFeePresets(saved);
+              }}
             />
             <CsvPanel
               preview={csvPreview}
-              onPreview={async (path) => setCsvPreview(await previewCsvImport(path))}
-              onImport={async (path, mapping) => {
-                await executeCsvImport(path, mapping);
+              onPreview={async (path) => setCsvPreview(await previewAtasImport(path))}
+              onImport={async (path) => {
+                await executeAtasImport(path);
                 await refresh();
               }}
               onExport={async (path) => {

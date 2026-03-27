@@ -21,6 +21,7 @@ fn init_schema(conn: &Connection) -> Result<()> {
         CREATE TABLE IF NOT EXISTS trades (
             id TEXT PRIMARY KEY,
             session_id TEXT NOT NULL DEFAULT '',
+            account TEXT NOT NULL DEFAULT '',
             instrument TEXT NOT NULL,
             custom_instrument TEXT,
             side TEXT NOT NULL,
@@ -33,10 +34,12 @@ fn init_schema(conn: &Connection) -> Result<()> {
             take_profit REAL,
             gross_pnl REAL NOT NULL,
             net_pnl REAL NOT NULL,
+            commission REAL NOT NULL DEFAULT 0,
             r_multiple REAL NOT NULL,
             mae REAL,
             mfe REAL,
             hold_minutes INTEGER NOT NULL,
+            execution_count INTEGER NOT NULL DEFAULT 0,
             mood TEXT NOT NULL DEFAULT '🙂',
             setup_description TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -100,6 +103,20 @@ pub fn save_app_preferences(conn: &Connection, preferences: AppPreferences) -> R
     write_setting(conn, "active_tab", &preferences.active_tab)?;
     write_setting(conn, "theme", &preferences.theme)?;
     get_app_preferences(conn)
+}
+
+pub fn get_instrument_fee_presets(conn: &Connection) -> Result<std::collections::HashMap<String, f64>> {
+    let raw = read_setting(conn, "instrument_fee_presets")?.unwrap_or_else(|| "{}".to_string());
+    Ok(serde_json::from_str(&raw).unwrap_or_default())
+}
+
+pub fn save_instrument_fee_presets(
+    conn: &Connection,
+    presets: std::collections::HashMap<String, f64>,
+) -> Result<std::collections::HashMap<String, f64>> {
+    let raw = serde_json::to_string(&presets)?;
+    write_setting(conn, "instrument_fee_presets", &raw)?;
+    get_instrument_fee_presets(conn)
 }
 
 pub fn list_tag_definitions(conn: &Connection) -> Result<Vec<TagDefinition>> {
@@ -185,12 +202,13 @@ pub fn upsert_trade(conn: &Connection, payload: TradeRecord) -> Result<TradeReco
     conn.execute(
         r#"
         INSERT INTO trades (
-            id, session_id, instrument, custom_instrument, side, entry_timestamp, exit_timestamp,
+            id, session_id, account, instrument, custom_instrument, side, entry_timestamp, exit_timestamp,
             entry_price, exit_price, contracts, stop_loss, take_profit,
-            gross_pnl, net_pnl, r_multiple, mae, mfe, hold_minutes, mood, setup_description, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, CURRENT_TIMESTAMP)
+            gross_pnl, net_pnl, commission, r_multiple, mae, mfe, hold_minutes, execution_count, mood, setup_description, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
             session_id=excluded.session_id,
+            account=excluded.account,
             instrument=excluded.instrument,
             custom_instrument=excluded.custom_instrument,
             side=excluded.side,
@@ -203,10 +221,12 @@ pub fn upsert_trade(conn: &Connection, payload: TradeRecord) -> Result<TradeReco
             take_profit=excluded.take_profit,
             gross_pnl=excluded.gross_pnl,
             net_pnl=excluded.net_pnl,
+            commission=excluded.commission,
             r_multiple=excluded.r_multiple,
             mae=excluded.mae,
             mfe=excluded.mfe,
             hold_minutes=excluded.hold_minutes,
+            execution_count=excluded.execution_count,
             mood=excluded.mood,
             setup_description=excluded.setup_description,
             updated_at=CURRENT_TIMESTAMP
@@ -214,6 +234,7 @@ pub fn upsert_trade(conn: &Connection, payload: TradeRecord) -> Result<TradeReco
         params![
             payload.id,
             payload.session_id,
+            payload.account,
             instrument_to_str(&payload.instrument),
             payload.custom_instrument,
             side_to_str(&payload.side),
@@ -226,10 +247,12 @@ pub fn upsert_trade(conn: &Connection, payload: TradeRecord) -> Result<TradeReco
             payload.take_profit,
             payload.gross_pnl,
             payload.net_pnl,
+            payload.commission,
             payload.r_multiple,
             payload.mae,
             payload.mfe,
             payload.hold_minutes,
+            payload.execution_count,
             payload.mood,
             payload.setup_description,
         ],
@@ -249,9 +272,9 @@ pub fn upsert_trade(conn: &Connection, payload: TradeRecord) -> Result<TradeReco
 pub fn list_trades(conn: &Connection) -> Result<Vec<TradeRecord>> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, session_id, instrument, custom_instrument, side, entry_timestamp, exit_timestamp,
+        SELECT id, session_id, account, instrument, custom_instrument, side, entry_timestamp, exit_timestamp,
                entry_price, exit_price, contracts, stop_loss, take_profit,
-               gross_pnl, net_pnl, r_multiple, mae, mfe, hold_minutes, mood, setup_description
+               gross_pnl, net_pnl, commission, r_multiple, mae, mfe, hold_minutes, execution_count, mood, setup_description
         FROM trades
         ORDER BY entry_timestamp DESC
         "#,
@@ -261,24 +284,27 @@ pub fn list_trades(conn: &Connection) -> Result<Vec<TradeRecord>> {
         Ok(TradeRecord {
             id: row.get(0)?,
             session_id: row.get(1)?,
-            instrument: instrument_from_str(&row.get::<_, String>(2)?),
-            custom_instrument: row.get(3)?,
-            side: side_from_str(&row.get::<_, String>(4)?),
-            entry_timestamp: row.get(5)?,
-            exit_timestamp: row.get(6)?,
-            entry_price: row.get(7)?,
-            exit_price: row.get(8)?,
-            contracts: row.get(9)?,
-            stop_loss: row.get(10)?,
-            take_profit: row.get(11)?,
-            gross_pnl: row.get(12)?,
-            net_pnl: row.get(13)?,
-            r_multiple: row.get(14)?,
-            mae: row.get(15)?,
-            mfe: row.get(16)?,
-            hold_minutes: row.get(17)?,
-            mood: row.get(18)?,
-            setup_description: row.get(19)?,
+            account: row.get(2)?,
+            instrument: instrument_from_str(&row.get::<_, String>(3)?),
+            custom_instrument: row.get(4)?,
+            side: side_from_str(&row.get::<_, String>(5)?),
+            entry_timestamp: row.get(6)?,
+            exit_timestamp: row.get(7)?,
+            entry_price: row.get(8)?,
+            exit_price: row.get(9)?,
+            contracts: row.get(10)?,
+            stop_loss: row.get(11)?,
+            take_profit: row.get(12)?,
+            gross_pnl: row.get(13)?,
+            net_pnl: row.get(14)?,
+            commission: row.get(15)?,
+            r_multiple: row.get(16)?,
+            mae: row.get(17)?,
+            mfe: row.get(18)?,
+            hold_minutes: row.get(19)?,
+            execution_count: row.get(20)?,
+            mood: row.get(21)?,
+            setup_description: row.get(22)?,
             tags: Vec::new(),
             images: Vec::new(),
             session_images: Vec::new(),
@@ -504,16 +530,33 @@ pub fn from_partial_trade(payload: serde_json::Value) -> Result<TradeRecord> {
     let exit_price = payload.get("exitPrice").and_then(|value| value.as_f64()).unwrap_or_default();
     let contracts = payload.get("contracts").and_then(|value| value.as_i64()).unwrap_or(1);
     let stop_loss = payload.get("stopLoss").and_then(|value| value.as_f64());
-    let gross_pnl = match payload.get("side").and_then(|value| value.as_str()).unwrap_or("LONG") {
+    let calculated_gross_pnl = match payload.get("side").and_then(|value| value.as_str()).unwrap_or("LONG") {
         "SHORT" => (entry_price - exit_price) * contracts as f64,
         _ => (exit_price - entry_price) * contracts as f64,
     };
-    let net_pnl = gross_pnl;
-    let risk = stop_loss
+    let gross_pnl = payload
+        .get("grossPnl")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(calculated_gross_pnl);
+    let commission = payload
+        .get("commission")
+        .and_then(|value| value.as_f64())
+        .unwrap_or_default();
+    let net_pnl = payload
+        .get("netPnl")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(gross_pnl - commission);
+    let calculated_risk = stop_loss
         .map(|value| ((entry_price - value).abs() * contracts as f64).max(0.01))
         .unwrap_or(1.0);
-    let r_multiple = net_pnl / risk;
-    let hold_minutes = parse_hold_minutes(&entry_timestamp, &exit_timestamp);
+    let r_multiple = payload
+        .get("rMultiple")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(net_pnl / calculated_risk);
+    let hold_minutes = payload
+        .get("holdMinutes")
+        .and_then(|value| value.as_i64())
+        .unwrap_or_else(|| parse_hold_minutes(&entry_timestamp, &exit_timestamp));
 
     Ok(TradeRecord {
         id: payload
@@ -527,6 +570,11 @@ pub fn from_partial_trade(payload: serde_json::Value) -> Result<TradeRecord> {
             .map(ToString::to_string)
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| default_session_id(&entry_timestamp)),
+        account: payload
+            .get("account")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default()
+            .to_string(),
         instrument: instrument_from_str(payload.get("instrument").and_then(|value| value.as_str()).unwrap_or("ES")),
         custom_instrument: payload
             .get("customInstrument")
@@ -542,10 +590,15 @@ pub fn from_partial_trade(payload: serde_json::Value) -> Result<TradeRecord> {
         take_profit: payload.get("takeProfit").and_then(|value| value.as_f64()),
         gross_pnl,
         net_pnl,
+        commission,
         r_multiple,
         mae: payload.get("mae").and_then(|value| value.as_f64()),
         mfe: payload.get("mfe").and_then(|value| value.as_f64()),
         hold_minutes,
+        execution_count: payload
+            .get("executionCount")
+            .and_then(|value| value.as_i64())
+            .unwrap_or_default(),
         mood: payload.get("mood").and_then(|value| value.as_str()).unwrap_or("🙂").to_string(),
         setup_description: payload
             .get("setupDescription")
@@ -608,17 +661,23 @@ fn default_session_id(entry_timestamp: &str) -> String {
 fn ensure_trade_session_column(conn: &Connection) -> Result<()> {
     let mut stmt = conn.prepare("PRAGMA table_info(trades)")?;
     let mut rows = stmt.query([])?;
-    let mut has_column = false;
+    let mut columns = std::collections::HashSet::new();
     while let Some(row) = rows.next()? {
         let name: String = row.get(1)?;
-        if name == "session_id" {
-            has_column = true;
-            break;
-        }
+        columns.insert(name);
     }
 
-    if !has_column {
+    if !columns.contains("session_id") {
         conn.execute("ALTER TABLE trades ADD COLUMN session_id TEXT NOT NULL DEFAULT ''", [])?;
+    }
+    if !columns.contains("account") {
+        conn.execute("ALTER TABLE trades ADD COLUMN account TEXT NOT NULL DEFAULT ''", [])?;
+    }
+    if !columns.contains("commission") {
+        conn.execute("ALTER TABLE trades ADD COLUMN commission REAL NOT NULL DEFAULT 0", [])?;
+    }
+    if !columns.contains("execution_count") {
+        conn.execute("ALTER TABLE trades ADD COLUMN execution_count INTEGER NOT NULL DEFAULT 0", [])?;
     }
 
     Ok(())
@@ -628,7 +687,11 @@ fn instrument_to_str(value: &Instrument) -> &'static str {
     match value {
         Instrument::Es => "ES",
         Instrument::Nq => "NQ",
+        Instrument::Mes => "MES",
+        Instrument::Mnq => "MNQ",
         Instrument::Cl => "CL",
+        Instrument::Mcl => "MCL",
+        Instrument::Btcus => "BTCUS",
         Instrument::Custom => "CUSTOM",
     }
 }
@@ -643,7 +706,11 @@ fn side_to_str(value: &Side) -> &'static str {
 fn instrument_from_str(value: &str) -> Instrument {
     match value {
         "NQ" => Instrument::Nq,
+        "MES" => Instrument::Mes,
+        "MNQ" => Instrument::Mnq,
         "CL" => Instrument::Cl,
+        "MCL" => Instrument::Mcl,
+        "BTCUS" => Instrument::Btcus,
         "CUSTOM" => Instrument::Custom,
         _ => Instrument::Es,
     }

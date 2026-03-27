@@ -5,7 +5,11 @@ use serde::{Deserialize, Serialize};
 pub enum Instrument {
     Es,
     Nq,
+    Mes,
+    Mnq,
     Cl,
+    Mcl,
+    Btcus,
     Custom,
 }
 
@@ -30,6 +34,7 @@ pub struct TradeImage {
 pub struct TradeRecord {
     pub id: String,
     pub session_id: String,
+    pub account: String,
     pub instrument: Instrument,
     pub custom_instrument: Option<String>,
     pub side: Side,
@@ -42,10 +47,12 @@ pub struct TradeRecord {
     pub take_profit: Option<f64>,
     pub gross_pnl: f64,
     pub net_pnl: f64,
+    pub commission: f64,
     pub r_multiple: f64,
     pub mae: Option<f64>,
     pub mfe: Option<f64>,
     pub hold_minutes: i64,
+    pub execution_count: i64,
     pub mood: String,
     pub setup_description: String,
     pub tags: Vec<String>,
@@ -123,5 +130,3 @@ pub struct AppPreferences {
     pub active_tab: String,
     pub theme: String,
 }
-
-pub type CsvMapping = std::collections::HashMap<String, String>;
