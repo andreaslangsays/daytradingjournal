@@ -25,6 +25,7 @@ export default function App() {
   const [trades, setTrades] = useState<TradeRecord[]>([]);
   const [tags, setTags] = useState<TradeTag[]>([]);
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
+  const [currentJournal, setCurrentJournal] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -111,13 +112,12 @@ export default function App() {
       }}
     >
       <AppShell activeTab={activeTab} onTabChange={setActiveTab}>
-        <header className="glass flex flex-col gap-4 rounded-2xl border border-border/80 p-6 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-foreground/62">{dictionary.app.eyebrow}</p>
-            <h2 className="mt-2 text-3xl font-semibold text-foreground">{dictionary.app.title}</h2>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{dictionary.app.subtitle}</p>
+        <header className="glass flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border/80 px-4 py-2">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-foreground/55">{dictionary.app.currentJournal}</p>
+            <p className="truncate text-sm font-medium text-foreground">{currentJournal || dictionary.app.defaultJournal}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" onClick={toggleTheme}>
               {theme === "dark" ? <Sun className="mr-2" size={16} /> : <Moon className="mr-2" size={16} />}
               {theme === "dark" ? dictionary.app.themeLight : dictionary.app.themeDark}
@@ -125,13 +125,20 @@ export default function App() {
             <Button
               variant="secondary"
               onClick={async () => {
-                await openJournal();
+                const path = await openJournal();
+                setCurrentJournal(path.split(/[\\/]/).pop() || path);
                 await refresh();
               }}
             >
               {dictionary.app.openJournal}
             </Button>
-            <Button variant="secondary" onClick={() => void saveJournal()}>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                const path = await saveJournal();
+                setCurrentJournal(path.split(/[\\/]/).pop() || path);
+              }}
+            >
               {dictionary.app.saveJournal}
             </Button>
             <Button onClick={() => void refresh()}>
@@ -143,11 +150,11 @@ export default function App() {
 
         {pending ? (
           <Card>
-            <CardContent className="py-4 text-sm text-muted-foreground">{dictionary.app.refreshing}</CardContent>
+            <CardContent className="py-3 text-sm text-muted-foreground">{dictionary.app.refreshing}</CardContent>
           </Card>
         ) : null}
 
-        {activeTab === "dashboard" ? <Dashboard trades={trades} /> : null}
+        {activeTab === "dashboard" ? <Dashboard trades={trades} variant="overview" /> : null}
         {activeTab === "trades" ? <TradeHistory trades={trades} /> : null}
         {activeTab === "new" ? (
           <TradeForm
@@ -157,40 +164,41 @@ export default function App() {
             onAttachSessionScreenshots={handleAttachSessionScreenshots}
           />
         ) : null}
-        {activeTab === "csv" ? (
-          <CsvPanel
-            preview={csvPreview}
-            onPreview={async (path) => setCsvPreview(await previewCsvImport(path))}
-            onImport={async (path, mapping) => {
-              await executeCsvImport(path, mapping);
-              await refresh();
-            }}
-            onExport={async (path) => {
-              await exportCsv(path);
-            }}
-          />
-        ) : null}
+        {activeTab === "stats" ? <Dashboard trades={trades} variant="stats" /> : null}
         {activeTab === "settings" ? (
-          <SettingsScreen
-            language={language}
-            onLanguageChange={setLanguage}
-            theme={theme}
-            onThemeChange={setThemeState}
-            tags={tags}
-            onSaveTag={async (tag) => {
-              await saveTagDefinition(tag);
-              await refresh();
-            }}
-            onDeleteTag={async (tagId) => {
-              await deleteTagDefinition(tagId);
-              await refresh();
-            }}
-            onClearJournal={async (confirmation) => {
-              await clearJournal(confirmation);
-              await refresh();
-              setActiveTab("dashboard");
-            }}
-          />
+          <div className="grid gap-4">
+            <SettingsScreen
+              language={language}
+              onLanguageChange={setLanguage}
+              theme={theme}
+              onThemeChange={setThemeState}
+              tags={tags}
+              onSaveTag={async (tag) => {
+                await saveTagDefinition(tag);
+                await refresh();
+              }}
+              onDeleteTag={async (tagId) => {
+                await deleteTagDefinition(tagId);
+                await refresh();
+              }}
+              onClearJournal={async (confirmation) => {
+                await clearJournal(confirmation);
+                await refresh();
+                setActiveTab("dashboard");
+              }}
+            />
+            <CsvPanel
+              preview={csvPreview}
+              onPreview={async (path) => setCsvPreview(await previewCsvImport(path))}
+              onImport={async (path, mapping) => {
+                await executeCsvImport(path, mapping);
+                await refresh();
+              }}
+              onExport={async (path) => {
+                await exportCsv(path);
+              }}
+            />
+          </div>
         ) : null}
       </AppShell>
     </I18nContext.Provider>

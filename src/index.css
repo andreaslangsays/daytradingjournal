@@ -44,15 +44,16 @@
 
 body {
   @apply min-h-screen bg-background text-foreground antialiased;
+  font-feature-settings: "tnum" 1, "cv02" 1, "cv03" 1, "cv04" 1;
   background-image:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.82), transparent 28%),
-    linear-gradient(180deg, #eef2f7 0%, #dde4eb 100%);
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.48), transparent 24%),
+    linear-gradient(180deg, #eef1f4 0%, #e4e8ed 100%);
 }
 
 .dark body {
   background-image:
-    radial-gradient(circle at top, rgba(0, 208, 255, 0.08), transparent 24%),
-    linear-gradient(180deg, #0b1018 0%, #090d15 100%);
+    radial-gradient(circle at top, rgba(0, 208, 255, 0.06), transparent 22%),
+    linear-gradient(180deg, #0d1117 0%, #0a0e14 100%);
 }
 
 #root {
@@ -75,11 +76,21 @@ body {
 }
 
 .glass {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(245, 248, 252, 0.92) 100%);
-  backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(247, 249, 252, 0.88) 100%);
+  backdrop-filter: blur(8px);
 }
 
 .dark .glass {
-  background: linear-gradient(180deg, rgba(28, 34, 47, 0.96) 0%, rgba(17, 22, 33, 0.9) 100%);
-  backdrop-filter: blur(14px);
+  background: linear-gradient(180deg, rgba(24, 28, 36, 0.96) 0%, rgba(16, 20, 27, 0.92) 100%);
+  backdrop-filter: blur(10px);
+}
+
+.terminal-sidebar {
+  background:
+    linear-gradient(180deg, rgba(16, 20, 27, 0.98) 0%, rgba(11, 15, 21, 0.98) 100%),
+    linear-gradient(180deg, rgba(0, 208, 255, 0.06), transparent 40%);
+}
+
+.metric-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }

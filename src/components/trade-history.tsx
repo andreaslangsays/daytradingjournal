@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Expand, Images, Layers3, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { readTradeImageBytes } from "@/lib/tauri";
 import type { TradeImage, TradeRecord } from "@/lib/types";
@@ -26,6 +26,7 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
   const [instrumentFilter, setInstrumentFilter] = useState("");
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const imageUrlsRef = useRef<Record<string, string>>({});
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [viewerMode, setViewerMode] = useState<ViewerMode>("trade");
@@ -77,6 +78,10 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
   const activeImage = currentImages[activeImageIndex] ?? null;
 
   useEffect(() => {
+    imageUrlsRef.current = imageUrls;
+  }, [imageUrls]);
+
+  useEffect(() => {
     if (!selectedTrade) {
       return;
     }
@@ -86,8 +91,8 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
       const allImages = [...selectedTrade.images, ...selectedTrade.sessionImages];
       const pairs = await Promise.all(
         allImages.map(async (image) => {
-          if (imageUrls[image.id]) {
-            return [image.id, imageUrls[image.id]] as const;
+          if (imageUrlsRef.current[image.id]) {
+            return [image.id, imageUrlsRef.current[image.id]] as const;
           }
           const bytes = await readTradeImageBytes(image.relativePath);
           const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes)]));
@@ -126,9 +131,9 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
 
   useEffect(() => {
     return () => {
-      Object.values(imageUrls).forEach((url) => URL.revokeObjectURL(url));
+      Object.values(imageUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [imageUrls]);
+  }, []);
 
   const selectNeighborTrade = (direction: -1 | 1) => {
     if (selectedTradeIndex < 0) return;

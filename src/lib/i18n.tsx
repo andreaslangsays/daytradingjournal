@@ -5,7 +5,7 @@ const dictionaries = {
   de: {
     locale: "de-DE",
     languages: { de: "Deutsch", en: "Englisch", es: "Spanisch" },
-    tabs: { dashboard: "Dashboard", trades: "Trades", new: "Erfassung", csv: "CSV", settings: "Einstellungen" },
+    tabs: { dashboard: "Dashboard", trades: "Trades", new: "Erfassung", stats: "Statistiken", settings: "Einstellungen" },
     shell: {
       eyebrow: "Personal Trader",
       title: "Personal Trader Journal",
@@ -24,6 +24,8 @@ const dictionaries = {
       refreshing: "Workspace-Daten werden aktualisiert...",
       themeLight: "Hell",
       themeDark: "Dunkel",
+      currentJournal: "Aktuelles Journal",
+      defaultJournal: "lokaler_workspace.trj",
     },
     dashboard: {
       loading: "Dashboard-Kennzahlen werden geladen...",
@@ -200,7 +202,7 @@ const dictionaries = {
   en: {
     locale: "en-US",
     languages: { de: "German", en: "English", es: "Spanish" },
-    tabs: { dashboard: "Dashboard", trades: "Trades", new: "Capture", csv: "CSV", settings: "Settings" },
+    tabs: { dashboard: "Dashboard", trades: "Trades", new: "Capture", stats: "Statistics", settings: "Settings" },
     shell: {
       eyebrow: "Personal Trader",
       title: "Personal Trader Journal",
@@ -219,6 +221,8 @@ const dictionaries = {
       refreshing: "Refreshing workspace data...",
       themeLight: "Light",
       themeDark: "Dark",
+      currentJournal: "Current journal",
+      defaultJournal: "local_workspace.trj",
     },
     dashboard: {
       loading: "Loading dashboard metrics...",
@@ -395,7 +399,7 @@ const dictionaries = {
   es: {
     locale: "es-ES",
     languages: { de: "Alemán", en: "Inglés", es: "Español" },
-    tabs: { dashboard: "Dashboard", trades: "Trades", new: "Captura", csv: "CSV", settings: "Ajustes" },
+    tabs: { dashboard: "Dashboard", trades: "Trades", new: "Captura", stats: "Estadísticas", settings: "Ajustes" },
     shell: {
       eyebrow: "Personal Trader",
       title: "Personal Trader Journal",
@@ -414,6 +418,8 @@ const dictionaries = {
       refreshing: "Actualizando los datos del workspace...",
       themeLight: "Claro",
       themeDark: "Oscuro",
+      currentJournal: "Journal actual",
+      defaultJournal: "workspace_local.trj",
     },
     dashboard: {
       loading: "Cargando métricas del dashboard...",
