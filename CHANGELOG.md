@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.3 - 2026-03-27
+
+### Added
+- Horizontal top navigation with integrated workspace actions.
+- Bottom status bar with journal status, offline indicator and trade/session counters.
+- Collapsible trade detail panel for list-focused review.
+- Compact internal settings navigation for general, tags and system sections.
+
+### Changed
+- Full shell transformed from sidebar layout into a compact desktop-terminal frame.
+- Global spacing reduced further with denser 4px/8px-oriented rhythm and 13px base sizing.
+- Dashboard tiles compressed toward KPI-first cards with less onboarding text.
+- Tables and settings panels tightened to better use horizontal space.
+- Borders now carry more of the visual separation, with reduced decorative weight.
+
+### Fixed
+- Consistency of compact border radius across remaining panels and data surfaces.
+
 ## 0.1.2 - 2026-03-27
 
 ### Added

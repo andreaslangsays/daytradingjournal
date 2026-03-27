@@ -44,7 +44,9 @@
 
 body {
   @apply min-h-screen bg-background text-foreground antialiased;
+  font-size: 13px;
   font-feature-settings: "tnum" 1, "cv02" 1, "cv03" 1, "cv04" 1;
+  font-variant-numeric: tabular-nums;
   background-image:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.48), transparent 24%),
     linear-gradient(180deg, #eef1f4 0%, #e4e8ed 100%);
@@ -77,7 +79,7 @@ body {
 
 .glass {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(247, 249, 252, 0.88) 100%);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(6px);
 }
 
 .dark .glass {

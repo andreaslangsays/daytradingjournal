@@ -80,7 +80,7 @@ export function HeatMap({
         return (
           <div
             key={cell.bucket}
-            className="rounded-xl border border-border/80 p-4"
+            className="rounded-[5px] border border-border/80 p-4"
             style={{ backgroundColor: positive ? `rgba(16, 185, 129, ${opacity * 0.78})` : `rgba(239, 68, 68, ${opacity * 0.74})` }}
           >
             <p className="text-xs uppercase tracking-wide text-foreground/72">{cell.bucket}</p>
@@ -162,7 +162,7 @@ function SummaryMetric({
   tone?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border/80 bg-background/55 p-4">
+    <div className="rounded-[5px] border border-border/80 bg-background/55 p-4">
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className={`mt-3 text-2xl font-semibold ${tone}`}>{value}</p>
     </div>

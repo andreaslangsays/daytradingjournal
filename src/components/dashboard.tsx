@@ -43,10 +43,10 @@ export function Dashboard({ trades, variant = "stats" }: { trades: TradeRecord[]
   const topTime = [...metrics.weekdayHeatmap].sort((left, right) => right.value - left.value)[0];
   const executionHealthy = metrics.expectancy >= 0 && metrics.profitFactor >= 1;
   const kpis = [
-    { label: copy.dashboard.kpis.winRate.label, detail: copy.dashboard.kpis.winRate.detail, value: formatPercent(metrics.winRate, locale), icon: ArrowUpRight, tone: "text-success" },
-    { label: copy.dashboard.kpis.expectancy.label, detail: copy.dashboard.kpis.expectancy.detail, value: formatCurrency(metrics.expectancy, locale), icon: Target, tone: "text-cyan-500" },
-    { label: copy.dashboard.kpis.profitFactor.label, detail: copy.dashboard.kpis.profitFactor.detail, value: metrics.profitFactor.toFixed(2), icon: TrendingUp, tone: "text-foreground" },
-    { label: copy.dashboard.kpis.maxDrawdown.label, detail: copy.dashboard.kpis.maxDrawdown.detail, value: formatCurrency(metrics.maxDrawdown, locale), icon: ShieldAlert, tone: "text-danger" },
+    { label: copy.dashboard.kpis.winRate.label, value: formatPercent(metrics.winRate, locale), icon: ArrowUpRight, tone: "text-success", trend: metrics.winRate >= 50 ? "Stabil" : "Unter 50%" },
+    { label: copy.dashboard.kpis.expectancy.label, value: formatCurrency(metrics.expectancy, locale), icon: Target, tone: "text-cyan-500", trend: metrics.expectancy >= 0 ? "Positiv" : "Negativ" },
+    { label: copy.dashboard.kpis.profitFactor.label, value: metrics.profitFactor.toFixed(2), icon: TrendingUp, tone: "text-foreground", trend: metrics.profitFactor >= 1 ? "Robust" : "Druck" },
+    { label: copy.dashboard.kpis.maxDrawdown.label, value: formatCurrency(metrics.maxDrawdown, locale), icon: ShieldAlert, tone: "text-danger", trend: "Risiko" },
   ];
 
   return (
@@ -104,14 +104,14 @@ function OverviewGrid({
   copy: ReturnType<typeof useI18n>["copy"];
   locale: string;
   metrics: DashboardMetrics;
-  kpis: Array<{ label: string; detail: string; value: string; icon: React.ComponentType<{ className?: string }>; tone: string }>;
+  kpis: Array<{ label: string; value: string; icon: React.ComponentType<{ className?: string }>; tone: string; trend: string }>;
   topTag?: { label: string; count: number; pnl: number };
   topTime?: { bucket: string; value: number };
   executionHealthy: boolean;
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
-      <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-3 xl:grid-cols-[1.45fr_1fr]">
+      <div className="grid gap-3 md:grid-cols-2">
         {kpis.map((kpi) => (
           <Card key={kpi.label} className="shadow-none">
             <CardHeader className="pb-2">
@@ -119,10 +119,10 @@ function OverviewGrid({
                 <CardDescription>{kpi.label}</CardDescription>
                 <kpi.icon className={kpi.tone} />
               </div>
-              <CardTitle className={`metric-value text-[30px] ${kpi.tone}`}>{kpi.value}</CardTitle>
+              <CardTitle className={`metric-value text-[26px] ${kpi.tone}`}>{kpi.value}</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-xs leading-5 text-muted-foreground">{kpi.detail}</p>
+            <CardContent className="pt-2">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{kpi.trend}</p>
             </CardContent>
           </Card>
         ))}
@@ -134,8 +134,7 @@ function OverviewGrid({
               <CardTitle className="mt-1 text-base">{copy.dashboard.equityTitle}</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs leading-5 text-muted-foreground">{copy.dashboard.equityText}</p>
+          <CardContent className="space-y-2">
             <EquityCurveChart
               data={metrics.equityCurve}
               locale={locale}
@@ -151,7 +150,7 @@ function OverviewGrid({
         </Card>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         <Card className="shadow-none">
           <CardHeader className="pb-2">
             <div>
@@ -159,7 +158,7 @@ function OverviewGrid({
               <CardTitle className="mt-1 text-base">{copy.dashboard.insightTitle}</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="grid gap-2">
             <InsightCard label={copy.dashboard.insightCards.strongestTime} value={topTime ? topTime.bucket : copy.dashboard.insightCards.noTime} detail={topTime ? formatCurrency(topTime.value, locale) : copy.dashboard.noData} />
             <InsightCard label={copy.dashboard.insightCards.strongestTag} value={topTag ? topTag.label : copy.dashboard.insightCards.noTag} detail={topTag ? formatCurrency(topTag.pnl, locale) : copy.dashboard.noData} />
             <InsightCard label={copy.dashboard.insightCards.executionRead} value={executionHealthy ? copy.dashboard.heatPositive : copy.dashboard.heatNegative} detail={executionHealthy ? copy.dashboard.insightCards.executionGood : copy.dashboard.insightCards.executionWeak} />
@@ -173,7 +172,7 @@ function OverviewGrid({
               <CardTitle className="mt-1 text-base">{copy.dashboard.matrixTitle}</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="grid gap-2">
             <MetricRow label={copy.dashboard.metrics.avgWin.label} detail={copy.dashboard.metrics.avgWin.detail} value={formatCurrency(metrics.averageWin, locale)} positive />
             <MetricRow label={copy.dashboard.metrics.avgLoss.label} detail={copy.dashboard.metrics.avgLoss.detail} value={formatCurrency(metrics.averageLoss, locale)} />
             <MetricRow label={copy.dashboard.metrics.profitFactor.label} detail={copy.dashboard.metrics.profitFactor.detail} value={metrics.profitFactor.toFixed(2)} positive />
@@ -200,9 +199,9 @@ function StatisticsGrid({
   executionHealthy: boolean;
 }) {
   return (
-    <div className="grid gap-4 2xl:grid-cols-[1.25fr_1fr]">
-      <div className="grid gap-4">
-        <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+    <div className="grid gap-3 2xl:grid-cols-[1.25fr_1fr]">
+      <div className="grid gap-3">
+        <div className="grid gap-3 xl:grid-cols-[1.4fr_1fr]">
           <Card className="shadow-none">
             <CardHeader className="pb-2">
               <div>
@@ -210,8 +209,7 @@ function StatisticsGrid({
                 <CardTitle className="mt-1 text-base">{copy.dashboard.equityTitle}</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-xs leading-5 text-muted-foreground">{copy.dashboard.equityText}</p>
+            <CardContent className="space-y-2">
               <EquityCurveChart
                 data={metrics.equityCurve}
                 locale={locale}
@@ -233,7 +231,7 @@ function StatisticsGrid({
                 <CardTitle className="mt-1 text-base">{copy.dashboard.insightTitle}</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="grid gap-3">
+            <CardContent className="grid gap-2">
               <InsightCard label={copy.dashboard.insightCards.strongestTime} value={topTime ? topTime.bucket : copy.dashboard.insightCards.noTime} detail={topTime ? formatCurrency(topTime.value, locale) : copy.dashboard.noData} />
               <InsightCard label={copy.dashboard.insightCards.strongestTag} value={topTag ? topTag.label : copy.dashboard.insightCards.noTag} detail={topTag ? formatCurrency(topTag.pnl, locale) : copy.dashboard.noData} />
               <InsightCard label={copy.dashboard.insightCards.executionRead} value={executionHealthy ? copy.dashboard.heatPositive : copy.dashboard.heatNegative} detail={executionHealthy ? copy.dashboard.insightCards.executionGood : copy.dashboard.insightCards.executionWeak} />
@@ -248,8 +246,7 @@ function StatisticsGrid({
               <CardTitle className="mt-1 text-base">{copy.dashboard.maeMfeTitle}</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs leading-5 text-muted-foreground">{copy.dashboard.maeMfeText}</p>
+          <CardContent className="space-y-2">
             <ScatterSummary data={metrics.maeMfe} locale={locale} labels={{ empty: copy.dashboard.noData, bestTrade: copy.dashboard.bestTrade, worstTrade: copy.dashboard.worstTrade, efficiency: copy.dashboard.efficiency, mfeAxis: copy.dashboard.scatterMfe, maeAxis: copy.dashboard.scatterMae }} />
           </CardContent>
         </Card>
@@ -261,14 +258,13 @@ function StatisticsGrid({
               <CardTitle className="mt-1 text-base">{copy.dashboard.timeTitle}</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs leading-5 text-muted-foreground">{copy.dashboard.timeText}</p>
+          <CardContent className="space-y-2">
             <HeatMap data={metrics.weekdayHeatmap} locale={locale} labels={{ positive: copy.dashboard.heatPositive, negative: copy.dashboard.heatNegative, empty: copy.dashboard.noData }} />
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         <Card className="shadow-none">
           <CardHeader className="pb-2">
             <div>
@@ -276,7 +272,7 @@ function StatisticsGrid({
               <CardTitle className="mt-1 text-base">{copy.dashboard.matrixTitle}</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="grid gap-2">
             <MetricRow label={copy.dashboard.metrics.avgWin.label} detail={copy.dashboard.metrics.avgWin.detail} value={formatCurrency(metrics.averageWin, locale)} positive />
             <MetricRow label={copy.dashboard.metrics.avgLoss.label} detail={copy.dashboard.metrics.avgLoss.detail} value={formatCurrency(metrics.averageLoss, locale)} />
             <MetricRow label={copy.dashboard.metrics.profitFactor.label} detail={copy.dashboard.metrics.profitFactor.detail} value={metrics.profitFactor.toFixed(2)} positive />
@@ -291,11 +287,10 @@ function StatisticsGrid({
               <CardTitle className="mt-1 text-base">{copy.dashboard.tagTitle}</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs leading-5 text-muted-foreground">{copy.dashboard.tagText}</p>
+          <CardContent className="space-y-2">
             <div className="space-y-2">
               {metrics.tagStats.map((item) => (
-                <div key={item.label} className="grid gap-2 rounded-md border border-border/80 bg-background/55 px-3 py-3 md:grid-cols-[minmax(0,1fr)_110px_90px]">
+                <div key={item.label} className="grid gap-2 rounded-[5px] border border-border/80 bg-background/55 px-3 py-3 md:grid-cols-[minmax(0,1fr)_110px_90px]">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{item.count} {copy.dashboard.tagCountSuffix}</p>
@@ -394,7 +389,7 @@ function FilterSelect({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="h-9 rounded-md border border-border/80 bg-secondary px-3 text-[13px] text-foreground outline-none focus:ring-2 focus:ring-ring"
+      className="h-9 rounded-[5px] border border-border/80 bg-secondary px-3 text-[13px] text-foreground outline-none focus:ring-2 focus:ring-ring"
     >
       <option value="">{placeholder}</option>
       {options.map((option) => (
@@ -408,7 +403,7 @@ function FilterSelect({
 
 function MetricRow({ label, detail, value, positive }: { label: string; detail: string; value: string; positive?: boolean }) {
   return (
-    <div className="grid gap-2 rounded-md border border-border/80 bg-secondary px-3 py-3 md:grid-cols-[minmax(0,1fr)_140px] md:items-center">
+    <div className="grid gap-2 rounded-[5px] border border-border/80 bg-secondary px-3 py-3 md:grid-cols-[minmax(0,1fr)_140px] md:items-center">
       <div>
         <p className="text-[13px] font-medium text-foreground">{label}</p>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
@@ -420,7 +415,7 @@ function MetricRow({ label, detail, value, positive }: { label: string; detail: 
 
 function InsightCard({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <div className="rounded-md border border-border/80 bg-secondary px-3 py-3">
+    <div className="rounded-[5px] border border-border/80 bg-secondary px-3 py-3">
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-2 text-sm font-semibold text-foreground">{value}</p>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p>

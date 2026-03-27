@@ -5,10 +5,22 @@ import { cn } from "@/lib/utils";
 interface AppShellProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  currentJournal: string;
+  tradeCount: number;
+  sessionCount: number;
+  topBarActions: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function AppShell({ activeTab, onTabChange, children }: AppShellProps) {
+export function AppShell({
+  activeTab,
+  onTabChange,
+  currentJournal,
+  tradeCount,
+  sessionCount,
+  topBarActions,
+  children,
+}: AppShellProps) {
   const { copy } = useI18n();
   const tabs = [
     { id: "dashboard", label: copy.tabs.dashboard, icon: BarChart3 },
@@ -19,46 +31,60 @@ export function AppShell({ activeTab, onTabChange, children }: AppShellProps) {
   ] as const;
 
   return (
-    <div className="min-h-screen">
-      <aside className="terminal-sidebar fixed inset-y-0 left-0 z-20 flex w-[82px] flex-col overflow-hidden border-r border-white/10 px-3 py-4 text-slate-100 lg:w-[220px]">
-          <div className="border-b border-white/10 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.26em] text-cyan-200/75">{copy.shell.eyebrow}</p>
-            <h1 className="mt-2 hidden text-sm font-semibold leading-5 text-white lg:block">{copy.shell.title}</h1>
-          </div>
-
-          <nav className="mt-4 flex-1 space-y-1.5">
-            {tabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => onTabChange(id)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-[5px] border px-3 py-2 text-left text-[13px] transition",
-                  activeTab === id
-                    ? "border-cyan-400/30 bg-cyan-400/10 text-white"
-                    : "border-transparent text-slate-400 hover:border-white/10 hover:bg-white/5 hover:text-white",
-                )}
-                title={label}
-              >
-                <Icon size={16} />
-                <span className="hidden lg:inline">{label}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="border-t border-white/10 pt-4">
-            <div className="flex items-center gap-2 text-[11px] text-emerald-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(74,222,128,0.8)]" />
-              <span className="hidden lg:inline">{copy.shell.offlineReady}</span>
+    <div className="min-h-screen bg-background/60">
+      <header className="sticky top-0 z-30 border-b border-border/80 bg-background/96 backdrop-blur-sm">
+        <div className="flex h-11 items-center justify-between gap-3 px-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex items-center gap-2 border-r border-border/70 pr-3">
+              <div className="h-4 w-4 rounded-[3px] border border-primary/40 bg-primary/15" />
+              <span className="truncate text-[12px] font-semibold tracking-wide text-foreground">{copy.shell.title}</span>
             </div>
-            <p className="mt-2 hidden text-[11px] leading-5 text-slate-400 lg:block">{copy.shell.portableBody}</p>
-          </div>
-      </aside>
 
-      <div className="min-h-screen pl-[82px] lg:pl-[220px]">
-        <div className="min-w-0 bg-background/55">
-          <main className="min-h-screen p-3 md:p-4">{children}</main>
+            <nav className="flex min-w-0 items-center gap-1">
+              {tabs.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => onTabChange(id)}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 rounded-[4px] border px-2.5 text-[12px] transition",
+                    activeTab === id
+                      ? "border-border bg-secondary text-foreground"
+                      : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-secondary/55 hover:text-foreground",
+                  )}
+                >
+                  <Icon size={14} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="hidden min-w-0 items-center gap-2 border-r border-border/70 pr-3 xl:flex">
+              <span className="truncate text-[11px] text-muted-foreground">{currentJournal}</span>
+            </div>
+            {topBarActions}
+          </div>
         </div>
-      </div>
+      </header>
+
+      <main className="min-h-[calc(100vh-68px)] px-2 py-2">{children}</main>
+
+      <footer className="sticky bottom-0 z-20 border-t border-border/80 bg-background/96">
+        <div className="flex h-6 items-center justify-between gap-3 px-3 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              {copy.shell.offlineReady}
+            </span>
+            <span>Journal geladen</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span>Trades {tradeCount}</span>
+            <span>Sessions {sessionCount}</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -32,6 +32,7 @@ export default function App() {
 
   const preferences = useMemo<AppPreferences>(() => ({ language, activeTab, theme }), [activeTab, language, theme]);
   const dictionary = useMemo(() => getDictionary(language), [language]);
+  const sessionCount = useMemo(() => new Set(trades.map((trade) => trade.sessionId)).size, [trades]);
 
   const refresh = async () => {
     const [tradeRows, tagRows] = await Promise.all([
@@ -120,16 +121,16 @@ export default function App() {
         setLanguage,
       }}
     >
-      <AppShell activeTab={activeTab} onTabChange={handleTabChange}>
-        <header className="glass flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border/80 px-4 py-2">
-          <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.24em] text-foreground/55">{dictionary.app.currentJournal}</p>
-            <p className="truncate text-sm font-medium text-foreground">{currentJournal || dictionary.app.defaultJournal}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      <AppShell
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        currentJournal={currentJournal || dictionary.app.defaultJournal}
+        tradeCount={trades.length}
+        sessionCount={sessionCount}
+        topBarActions={
+          <div className="flex items-center gap-1.5">
             <Button variant="secondary" onClick={toggleTheme}>
-              {theme === "dark" ? <Sun className="mr-2" size={16} /> : <Moon className="mr-2" size={16} />}
-              {theme === "dark" ? dictionary.app.themeLight : dictionary.app.themeDark}
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
             </Button>
             <Button
               variant="secondary"
@@ -151,15 +152,16 @@ export default function App() {
               {dictionary.app.saveJournal}
             </Button>
             <Button onClick={() => void refresh()}>
-              <RefreshCw className="mr-2" size={16} />
+              <RefreshCw className="mr-1.5" size={14} />
               {dictionary.app.refresh}
             </Button>
           </div>
-        </header>
+        }
+      >
 
         {pending ? (
           <Card>
-            <CardContent className="py-3 text-sm text-muted-foreground">{dictionary.app.refreshing}</CardContent>
+            <CardContent className="py-2 text-sm text-muted-foreground">{dictionary.app.refreshing}</CardContent>
           </Card>
         ) : null}
 

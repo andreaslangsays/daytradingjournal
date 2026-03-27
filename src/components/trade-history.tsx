@@ -30,6 +30,7 @@ export function TradeHistory({ trades, onEditTrade }: { trades: TradeRecord[]; o
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [viewerMode, setViewerMode] = useState<ViewerMode>("trade");
+  const [detailsOpen, setDetailsOpen] = useState(true);
 
   const filteredTrades = useMemo(() => {
     return trades.filter((trade) => {
@@ -151,21 +152,24 @@ export function TradeHistory({ trades, onEditTrade }: { trades: TradeRecord[]; o
 
   return (
     <>
-      <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr]">
+      <div className={detailsOpen ? "grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]" : "grid gap-3"}>
         <Card>
           <CardHeader>
             <div>
               <CardDescription className="text-foreground/65">{copy.history.eyebrow}</CardDescription>
               <CardTitle className="mt-1 text-base text-foreground">{copy.history.title}</CardTitle>
             </div>
+            <Button type="button" variant="secondary" onClick={() => setDetailsOpen((current) => !current)}>
+              {detailsOpen ? "Details ausblenden" : "Details anzeigen"}
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <div className="grid gap-3 md:grid-cols-[1fr_220px]">
               <Input placeholder={copy.history.searchPlaceholder} value={query} onChange={(event) => setQuery(event.target.value)} />
               <Input placeholder={copy.history.filterPlaceholder} value={instrumentFilter} onChange={(event) => setInstrumentFilter(event.target.value.toUpperCase())} />
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               {groupedTrades.map((group) => (
                 <section key={group.sessionId} className="rounded-[5px] border border-border/80 bg-background/40">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 px-3 py-2.5">
@@ -215,7 +219,7 @@ export function TradeHistory({ trades, onEditTrade }: { trades: TradeRecord[]; o
                               <MoodBadge mood={trade.mood} />
                             </TableCell>
                             <TableCell>{trade.images.length}</TableCell>
-                            <TableCell className="max-w-[320px] truncate text-muted-foreground">{trade.setupDescription}</TableCell>
+                            <TableCell className="max-w-[520px] truncate text-muted-foreground">{trade.setupDescription}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -227,6 +231,7 @@ export function TradeHistory({ trades, onEditTrade }: { trades: TradeRecord[]; o
           </CardContent>
         </Card>
 
+        {detailsOpen ? (
         <Card>
           <CardHeader>
             <div>
@@ -322,6 +327,7 @@ export function TradeHistory({ trades, onEditTrade }: { trades: TradeRecord[]; o
             )}
           </CardContent>
         </Card>
+        ) : null}
       </div>
 
       {lightboxOpen && selectedTrade ? (
@@ -382,7 +388,7 @@ export function TradeHistory({ trades, onEditTrade }: { trades: TradeRecord[]; o
 
             <div className="min-h-0 flex-1 rounded-[5px] border border-border bg-background/98 p-3 shadow-glow">
               {activeImage && imageUrls[activeImage.id] ? (
-                <img src={imageUrls[activeImage.id]} alt={activeImage.description ?? "Trade screenshot"} className="h-full w-full rounded-lg object-contain" />
+                <img src={imageUrls[activeImage.id]} alt={activeImage.description ?? "Trade screenshot"} className="h-full w-full rounded-[5px] object-contain" />
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                   {viewerMode === "trade" ? copy.history.noScreenshots : copy.history.noSessionScreenshots}
@@ -398,7 +404,7 @@ export function TradeHistory({ trades, onEditTrade }: { trades: TradeRecord[]; o
               <InfoChip label={copy.history.contracts} value={String(selectedTrade.contracts)} />
               <InfoChip label={copy.history.pnl} value={formatCurrency(selectedTrade.netPnl, locale)} />
               <InfoChip label={copy.history.mood} value={selectedTrade.mood} />
-              <div className="min-w-0 rounded-lg border border-border/80 bg-secondary/65 px-3 py-2">
+              <div className="min-w-0 rounded-[5px] border border-border/80 bg-secondary/65 px-3 py-2">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">{copy.history.comment}</p>
                 <p className="mt-1 line-clamp-2 text-sm text-foreground">{selectedTrade.setupDescription || "-"}</p>
                 {activeImage?.description ? (

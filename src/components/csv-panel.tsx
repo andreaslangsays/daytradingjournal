@@ -81,7 +81,7 @@ export function CsvPanel({ preview, onPreview, onImport, onExport }: CsvPanelPro
           <Input value={exportPath} onChange={(event) => setExportPath(event.target.value)} placeholder={copy.csv.exportPlaceholder} />
           <Button onClick={() => onExport(exportPath)}>{copy.csv.exportAll}</Button>
           {preview ? (
-            <div className="overflow-x-auto rounded-xl border border-border/80">
+            <div className="overflow-x-auto rounded-[5px] border border-border/80">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/80">
