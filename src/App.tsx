@@ -23,6 +23,7 @@ export default function App() {
   const [language, setLanguageState] = useState<LanguageCode>(defaultPreferences.language);
   const [theme, setThemeState] = useState<ThemeMode>(defaultPreferences.theme);
   const [trades, setTrades] = useState<TradeRecord[]>([]);
+  const [editingTrade, setEditingTrade] = useState<TradeRecord | null>(null);
   const [tags, setTags] = useState<TradeTag[]>([]);
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
   const [currentJournal, setCurrentJournal] = useState("");
@@ -71,6 +72,7 @@ export default function App() {
   const handleSaveTrade = async (payload: Partial<TradeRecord>) => {
     const savedTrade = await saveTrade(payload);
     await refresh();
+    setEditingTrade(null);
     setActiveTab("trades");
     return savedTrade;
   };
@@ -101,6 +103,13 @@ export default function App() {
     setThemeState((current) => (current === "dark" ? "light" : "dark"));
   };
 
+  const handleTabChange = (tab: string) => {
+    if (tab === "new") {
+      setEditingTrade(null);
+    }
+    setActiveTab(tab);
+  };
+
   return (
     <I18nContext.Provider
       value={{
@@ -111,7 +120,7 @@ export default function App() {
         setLanguage,
       }}
     >
-      <AppShell activeTab={activeTab} onTabChange={setActiveTab}>
+      <AppShell activeTab={activeTab} onTabChange={handleTabChange}>
         <header className="glass flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border/80 px-4 py-2">
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-[0.24em] text-foreground/55">{dictionary.app.currentJournal}</p>
@@ -155,9 +164,18 @@ export default function App() {
         ) : null}
 
         {activeTab === "dashboard" ? <Dashboard trades={trades} variant="overview" /> : null}
-        {activeTab === "trades" ? <TradeHistory trades={trades} /> : null}
+        {activeTab === "trades" ? (
+          <TradeHistory
+            trades={trades}
+            onEditTrade={(trade) => {
+              setEditingTrade(trade);
+              setActiveTab("new");
+            }}
+          />
+        ) : null}
         {activeTab === "new" ? (
           <TradeForm
+            initialTrade={editingTrade}
             onSubmit={handleSaveTrade}
             availableTags={tags}
             onAttachScreenshots={handleAttachScreenshots}

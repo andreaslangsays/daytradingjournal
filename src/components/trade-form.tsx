@@ -1,6 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { PendingScreenshot, TradeRecord, TradeTag } from "@/lib/types";
 import { Button } from "./ui/button";
@@ -19,13 +19,14 @@ const moodColors: Record<string, string> = {
 };
 
 interface TradeFormProps {
+  initialTrade?: TradeRecord | null;
   onSubmit: (trade: Partial<TradeRecord>) => Promise<TradeRecord>;
   availableTags: TradeTag[];
   onAttachScreenshots: (tradeId: string, screenshots: PendingScreenshot[]) => Promise<void>;
   onAttachSessionScreenshots: (sessionId: string, screenshots: PendingScreenshot[]) => Promise<void>;
 }
 
-export function TradeForm({ onSubmit, availableTags, onAttachScreenshots, onAttachSessionScreenshots }: TradeFormProps) {
+export function TradeForm({ initialTrade, onSubmit, availableTags, onAttachScreenshots, onAttachSessionScreenshots }: TradeFormProps) {
   const { copy } = useI18n();
   const [form, setForm] = useState<Partial<TradeRecord>>({
     sessionId: `${new Date().toISOString().slice(0, 10)}-01`,
@@ -39,6 +40,19 @@ export function TradeForm({ onSubmit, availableTags, onAttachScreenshots, onAtta
   });
   const [screenshots, setScreenshots] = useState<PendingScreenshot[]>([]);
   const [sessionScreenshots, setSessionScreenshots] = useState<PendingScreenshot[]>([]);
+
+  useEffect(() => {
+    if (!initialTrade) {
+      return;
+    }
+
+    setForm({
+      ...initialTrade,
+      tags: [...initialTrade.tags],
+      entryTimestamp: initialTrade.entryTimestamp?.slice(0, 16),
+      exitTimestamp: initialTrade.exitTimestamp?.slice(0, 16),
+    });
+  }, [initialTrade]);
 
   const updateField = (key: keyof TradeRecord, value: unknown) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -176,7 +190,7 @@ export function TradeForm({ onSubmit, availableTags, onAttachScreenshots, onAtta
                     key={mood}
                     type="button"
                     onClick={() => updateField("mood", mood)}
-                    className={`rounded-md border text-base transition ${form.mood === mood ? "bg-secondary text-foreground" : "border-border/70 bg-background/60 text-muted-foreground"}`}
+                    className={`rounded-[5px] border text-base transition ${form.mood === mood ? "bg-secondary text-foreground" : "border-border/70 bg-background/60 text-muted-foreground"}`}
                     style={{
                       borderColor: form.mood === mood ? moodColors[mood] : undefined,
                       boxShadow: form.mood === mood ? `inset 0 0 0 1px ${moodColors[mood]}` : undefined,
@@ -213,7 +227,7 @@ export function TradeForm({ onSubmit, availableTags, onAttachScreenshots, onAtta
                         active ? form.tags?.filter((item) => item !== tag) : [...(form.tags ?? []), tag],
                       )
                     }
-                    className={`rounded-md border px-2.5 py-1 text-xs ${active ? "bg-background/90 text-foreground" : "border-border/70 bg-background/55 text-muted-foreground"}`}
+                    className={`rounded-[5px] border px-2.5 py-1 text-xs ${active ? "bg-background/90 text-foreground" : "border-border/70 bg-background/55 text-muted-foreground"}`}
                     style={active ? { borderColor: tagDefinition.color, boxShadow: `inset 0 0 0 1px ${tagDefinition.color}` } : undefined}
                   >
                     {tag}
@@ -239,7 +253,7 @@ export function TradeForm({ onSubmit, availableTags, onAttachScreenshots, onAtta
                 }
               }}
             >
-              {copy.tradeForm.saveTrade}
+              {initialTrade ? copy.tradeForm.updateTrade : copy.tradeForm.saveTrade}
             </Button>
           </div>
         </CardContent>
@@ -332,7 +346,7 @@ function ScreenshotCard({
         <div
           tabIndex={0}
           onPaste={onPaste(kind)}
-          className="rounded-md border border-dashed border-border/80 bg-background/55 p-4 outline-none transition focus:border-primary"
+          className="rounded-[5px] border border-dashed border-border/80 bg-background/55 p-4 outline-none transition focus:border-primary"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">{pasteHint}</p>
@@ -346,8 +360,8 @@ function ScreenshotCard({
 
         <div className="grid gap-3 md:grid-cols-2">
           {screenshots.map((shot) => (
-            <div key={shot.id} className="rounded-md border border-border/80 bg-background/55 p-3">
-              <img src={shot.previewUrl} alt="Screenshot preview" className="h-36 w-full rounded-md object-cover" />
+            <div key={shot.id} className="rounded-[5px] border border-border/80 bg-background/55 p-3">
+              <img src={shot.previewUrl} alt="Screenshot preview" className="h-36 w-full rounded-[5px] object-cover" />
               <label className="mt-3 grid gap-1.5">
                 <span className="text-xs font-medium text-muted-foreground">{descriptionLabel}</span>
                 <Input value={shot.description} onChange={(event) => onDescriptionChange(shot.id, event.target.value)} />

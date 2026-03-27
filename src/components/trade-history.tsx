@@ -20,7 +20,7 @@ const moodColors: Record<string, string> = {
 
 type ViewerMode = "trade" | "session";
 
-export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
+export function TradeHistory({ trades, onEditTrade }: { trades: TradeRecord[]; onEditTrade: (trade: TradeRecord) => void }) {
   const { copy, locale } = useI18n();
   const [query, setQuery] = useState("");
   const [instrumentFilter, setInstrumentFilter] = useState("");
@@ -151,12 +151,12 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
 
   return (
     <>
-      <div className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr]">
         <Card>
           <CardHeader>
             <div>
               <CardDescription className="text-foreground/65">{copy.history.eyebrow}</CardDescription>
-              <CardTitle className="mt-2 text-2xl text-foreground">{copy.history.title}</CardTitle>
+              <CardTitle className="mt-1 text-base text-foreground">{copy.history.title}</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -167,11 +167,11 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
 
             <div className="space-y-4">
               {groupedTrades.map((group) => (
-                <section key={group.sessionId} className="rounded-xl border border-border/80 bg-background/40">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 px-4 py-3">
+                <section key={group.sessionId} className="rounded-[5px] border border-border/80 bg-background/40">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 px-3 py-2.5">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{copy.history.sessionSummary}</p>
-                      <p className="mt-1 text-lg font-semibold text-foreground">{group.sessionId}</p>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{copy.history.sessionSummary}</p>
+                      <p className="mt-1 text-sm font-semibold text-foreground">{group.sessionId}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Badge>{group.trades.length} {copy.history.tradesInSession}</Badge>
@@ -231,17 +231,22 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
           <CardHeader>
             <div>
               <CardDescription className="text-foreground/65">{copy.history.details}</CardDescription>
-              <CardTitle className="mt-2 text-2xl text-foreground">
+              <CardTitle className="mt-1 text-base text-foreground">
                 {selectedTrade ? `${selectedTrade.instrument} ${selectedTrade.side}` : copy.history.details}
               </CardTitle>
             </div>
+            {selectedTrade ? (
+              <Button type="button" variant="secondary" onClick={() => onEditTrade(selectedTrade)}>
+                {copy.history.editTrade}
+              </Button>
+            ) : null}
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4">
             {!selectedTrade ? (
               <p className="text-sm text-muted-foreground">{copy.history.selectTrade}</p>
             ) : (
               <>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2.5 sm:grid-cols-2">
                   <StatTile label={copy.history.session} value={selectedTrade.sessionId} />
                   <StatTile label={copy.history.mood} value={<MoodBadge mood={selectedTrade.mood} />} />
                   <StatTile label={copy.history.hold} value={formatDuration(selectedTrade.holdMinutes)} />
@@ -255,7 +260,7 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
                 </div>
 
                 <section className="space-y-3">
-                  <h4 className="text-sm font-semibold text-foreground">{copy.history.tags}</h4>
+                  <h4 className="text-[13px] font-semibold text-foreground">{copy.history.tags}</h4>
                   <div className="flex flex-wrap gap-2">
                     {selectedTrade.tags.map((tag) => (
                       <Badge key={tag}>{tag}</Badge>
@@ -264,15 +269,15 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
                 </section>
 
                 <section className="space-y-3">
-                  <h4 className="text-sm font-semibold text-foreground">{copy.history.fullComment}</h4>
-                  <div className="rounded-xl border border-border/80 bg-secondary/60 p-4 text-sm leading-7 text-foreground">
+                  <h4 className="text-[13px] font-semibold text-foreground">{copy.history.fullComment}</h4>
+                  <div className="rounded-[5px] border border-border/80 bg-secondary/60 p-3 text-[13px] leading-6 text-foreground">
                     {selectedTrade.setupDescription || "-"}
                   </div>
                 </section>
 
                 <section className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
-                    <h4 className="text-sm font-semibold text-foreground">{copy.history.tradeShots}</h4>
+                    <h4 className="text-[13px] font-semibold text-foreground">{copy.history.tradeShots}</h4>
                     {selectedTrade.images.length > 0 ? (
                       <Button type="button" variant="secondary" onClick={() => openViewer("trade")}>
                         <Expand className="mr-2" size={16} />
@@ -294,7 +299,7 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
 
                 <section className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
-                    <h4 className="text-sm font-semibold text-foreground">{copy.history.sessionShots}</h4>
+                    <h4 className="text-[13px] font-semibold text-foreground">{copy.history.sessionShots}</h4>
                     {selectedTrade.sessionImages.length > 0 ? (
                       <Button type="button" variant="secondary" onClick={() => openViewer("session")}>
                         <Layers3 className="mr-2" size={16} />
@@ -322,7 +327,7 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
       {lightboxOpen && selectedTrade ? (
         <div className="fixed inset-0 z-50 bg-slate-950/72 p-4 backdrop-blur-sm">
           <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 bg-background/94 px-4 py-3 text-foreground shadow-glow">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[5px] border border-border bg-background/98 px-3 py-2.5 text-foreground shadow-glow">
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
@@ -368,14 +373,14 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
                     </Button>
                   </>
                 ) : null}
-                <Button type="button" variant="ghost" onClick={() => setLightboxOpen(false)}>
+                <Button type="button" variant="secondary" className="border-border bg-background text-foreground" onClick={() => setLightboxOpen(false)}>
                   <X className="mr-2" size={16} />
                   {copy.history.closeLightbox}
                 </Button>
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 rounded-xl border border-border/80 bg-background/94 p-4 shadow-glow">
+            <div className="min-h-0 flex-1 rounded-[5px] border border-border bg-background/98 p-3 shadow-glow">
               {activeImage && imageUrls[activeImage.id] ? (
                 <img src={imageUrls[activeImage.id]} alt={activeImage.description ?? "Trade screenshot"} className="h-full w-full rounded-lg object-contain" />
               ) : (
@@ -385,7 +390,7 @@ export function TradeHistory({ trades }: { trades: TradeRecord[] }) {
               )}
             </div>
 
-            <div className="grid gap-3 rounded-xl border border-border/80 bg-background/94 p-4 shadow-glow lg:grid-cols-[150px_130px_110px_90px_140px_110px_120px_1fr_auto_auto] lg:items-center">
+            <div className="grid gap-2.5 rounded-[5px] border border-border bg-background/98 p-3 shadow-glow lg:grid-cols-[150px_130px_110px_90px_140px_110px_120px_1fr_auto_auto] lg:items-center">
               <InfoChip label={copy.history.session} value={selectedTrade.sessionId} />
               <InfoChip label={copy.history.timestamp} value={selectedTrade.entryTimestamp.slice(0, 16).replace("T", " ")} />
               <InfoChip label={copy.history.instrument} value={selectedTrade.instrument} />
@@ -439,13 +444,13 @@ function ScreenshotGrid({
         <button
           key={image.id}
           type="button"
-          className="rounded-xl border border-border/80 bg-secondary/60 p-3 text-left"
+          className="rounded-[5px] border border-border/80 bg-secondary/60 p-2.5 text-left"
           onClick={() => onOpen(index)}
         >
           {imageUrls[image.id] ? (
-            <img src={imageUrls[image.id]} alt={image.description ?? "Screenshot"} className="h-52 w-full rounded-lg object-cover" />
+            <img src={imageUrls[image.id]} alt={image.description ?? "Screenshot"} className="h-48 w-full rounded-[5px] object-cover" />
           ) : (
-            <div className="flex h-52 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">Loading...</div>
+            <div className="flex h-48 items-center justify-center rounded-[5px] bg-muted text-sm text-muted-foreground">Loading...</div>
           )}
           {image.description ? <p className="mt-3 text-sm leading-6 text-muted-foreground">{image.description}</p> : null}
         </button>
@@ -464,9 +469,9 @@ function StatTile({
   tone?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border/80 bg-secondary/60 p-4">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <div className={`mt-2 text-lg font-semibold ${tone ?? "text-foreground"}`}>{value}</div>
+    <div className="rounded-[5px] border border-border/80 bg-secondary/60 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className={`metric-value mt-1.5 text-base font-semibold ${tone ?? "text-foreground"}`}>{value}</div>
     </div>
   );
 }
@@ -474,7 +479,7 @@ function StatTile({
 function MoodBadge({ mood }: { mood: string }) {
   return (
     <span
-      className="inline-flex h-12 w-12 items-center justify-center rounded-full border text-[1.65rem] shadow-sm"
+      className="inline-flex h-11 w-11 items-center justify-center rounded-[5px] border text-[1.45rem] shadow-sm"
       style={{ borderColor: moodColors[mood] ?? "#94a3b8", backgroundColor: `${moodColors[mood] ?? "#94a3b8"}22` }}
     >
       {mood}
@@ -484,9 +489,9 @@ function MoodBadge({ mood }: { mood: string }) {
 
 function InfoChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border/80 bg-secondary/65 px-3 py-2">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
+    <div className="rounded-[5px] border border-border/80 bg-secondary/65 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="metric-value mt-1 text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }

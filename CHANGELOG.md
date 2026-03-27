@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.2 - 2026-03-27
+
+### Added
+- Edit flow for existing journal entries directly from the trade detail panel.
+
+### Changed
+- Desktop feeling tightened with harder edges and a maximum corner radius of roughly `5px`.
+- Layout density increased across cards, controls, badges and detail surfaces.
+- Sidebar behavior refined to stay fixed and use the full vertical viewport height.
+
+### Fixed
+- Contrast issues across light and dark mode in several high-traffic surfaces.
+- Lightbox detail controls, especially the close action, for better readability.
+- Trade detail image behavior after switching across entries and screenshots.
+
 ## 0.1.1 - 2026-03-27
 
 ### Added

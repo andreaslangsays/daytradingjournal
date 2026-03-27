@@ -32,7 +32,7 @@ export function AppShell({ activeTab, onTabChange, children }: AppShellProps) {
                 key={id}
                 onClick={() => onTabChange(id)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-[13px] transition",
+                  "flex w-full items-center gap-3 rounded-[5px] border px-3 py-2 text-left text-[13px] transition",
                   activeTab === id
                     ? "border-cyan-400/30 bg-cyan-400/10 text-white"
                     : "border-transparent text-slate-400 hover:border-white/10 hover:bg-white/5 hover:text-white",
