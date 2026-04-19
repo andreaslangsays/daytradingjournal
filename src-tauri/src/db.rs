@@ -1,67 +1,133 @@
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Datelike, NaiveDateTime, TimeZone, Timelike, Utc};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use uuid::Uuid;
 
 use crate::models::{AppPreferences, DashboardMetrics, HeatmapPoint, Instrument, MaeMfePoint, SeriesPoint, Side, TagDefinition, TagStat, TradeImage, TradeRecord};
 
+const CURRENT_SCHEMA_VERSION: i32 = 2;
+
+struct MigrationScript {
+    version: i32,
+    sql: &'static str,
+}
+
+const MIGRATION_SCRIPTS: [MigrationScript; 2] = [
+    MigrationScript {
+        version: 1,
+        sql: include_str!("../migrations/v1__initial.sql"),
+    },
+    MigrationScript {
+        version: 2,
+        sql: include_str!("../migrations/v2__indexes.sql"),
+    },
+];
+
+#[derive(Debug, Clone)]
+pub struct MigrationOutcome {
+    pub from_version: i32,
+    pub to_version: i32,
+    pub did_migrate: bool,
+    pub used_legacy_upgrade: bool,
+}
+
 pub fn connect(path: &Path) -> Result<Connection> {
-    let conn = Connection::open(path)?;
-    conn.pragma_update(None, "journal_mode", "WAL")?;
-    conn.pragma_update(None, "foreign_keys", "ON")?;
-    init_schema(&conn)?;
+    let (conn, _) = connect_with_migrations(path)?;
     Ok(conn)
 }
 
-fn init_schema(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
+pub fn connect_with_migrations(path: &Path) -> Result<(Connection, MigrationOutcome)> {
+    let mut conn = open_connection(path)?;
+    let migration = apply_migrations(&mut conn)?;
+    Ok((conn, migration))
+}
+
+pub fn database_needs_migration(path: &Path) -> Result<bool> {
+    let conn = open_connection(path)?;
+    let version = schema_version(&conn)?;
+    if version > CURRENT_SCHEMA_VERSION {
+        bail!(
+            "Database schema version {} is newer than this app supports ({})",
+            version,
+            CURRENT_SCHEMA_VERSION
+        );
+    }
+    Ok(version < CURRENT_SCHEMA_VERSION || (version == 0 && has_legacy_tables(&conn)?))
+}
+
+pub fn checkpoint_wal(conn: &Connection) -> Result<()> {
+    conn.pragma_update(None, "wal_checkpoint", "TRUNCATE")
+        .context("Unable to checkpoint WAL")?;
+    Ok(())
+}
+
+fn open_connection(path: &Path) -> Result<Connection> {
+    let conn = Connection::open(path)?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    conn.pragma_update(None, "busy_timeout", 5_000)?;
+    Ok(conn)
+}
+
+fn apply_migrations(conn: &mut Connection) -> Result<MigrationOutcome> {
+    let from_version = schema_version(conn)?;
+    if from_version > CURRENT_SCHEMA_VERSION {
+        bail!(
+            "Database schema version {} is newer than this app supports ({})",
+            from_version,
+            CURRENT_SCHEMA_VERSION
+        );
+    }
+
+    let needs_legacy_upgrade = from_version == 0 && has_legacy_tables(conn)?;
+    let tx = conn.transaction()?;
+
+    if needs_legacy_upgrade {
+        repair_legacy_schema(&tx)?;
+    }
+
+    for migration in MIGRATION_SCRIPTS
+        .iter()
+        .filter(|migration| migration.version > from_version)
+    {
+        tx.execute_batch(migration.sql)
+            .with_context(|| format!("Failed to apply schema migration v{}", migration.version))?;
+        tx.pragma_update(None, "user_version", migration.version)?;
+    }
+
+    tx.commit()?;
+    seed_default_tags(conn)?;
+
+    Ok(MigrationOutcome {
+        from_version,
+        to_version: CURRENT_SCHEMA_VERSION,
+        did_migrate: from_version < CURRENT_SCHEMA_VERSION || needs_legacy_upgrade,
+        used_legacy_upgrade: needs_legacy_upgrade,
+    })
+}
+
+fn schema_version(conn: &Connection) -> Result<i32> {
+    Ok(conn.query_row("PRAGMA user_version", [], |row| row.get(0))?)
+}
+
+fn has_legacy_tables(conn: &Connection) -> Result<bool> {
+    Ok(table_exists(conn, "trades")?
+        || table_exists(conn, "trade_tags")?
+        || table_exists(conn, "trade_images")?
+        || table_exists(conn, "settings")?
+        || table_exists(conn, "tag_definitions")?)
+}
+
+fn table_exists(conn: &Connection, table_name: &str) -> Result<bool> {
+    let query = "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)";
+    Ok(conn.query_row(query, params![table_name], |row| row.get::<_, i64>(0))? == 1)
+}
+
+fn repair_legacy_schema(tx: &Transaction<'_>) -> Result<()> {
+    tx.execute_batch(
         r#"
-        CREATE TABLE IF NOT EXISTS trades (
-            id TEXT PRIMARY KEY,
-            session_id TEXT NOT NULL DEFAULT '',
-            account TEXT NOT NULL DEFAULT '',
-            instrument TEXT NOT NULL,
-            custom_instrument TEXT,
-            side TEXT NOT NULL,
-            entry_timestamp TEXT NOT NULL,
-            exit_timestamp TEXT NOT NULL,
-            entry_price REAL NOT NULL,
-            exit_price REAL NOT NULL,
-            contracts INTEGER NOT NULL,
-            stop_loss REAL,
-            take_profit REAL,
-            gross_pnl REAL NOT NULL,
-            net_pnl REAL NOT NULL,
-            commission REAL NOT NULL DEFAULT 0,
-            r_multiple REAL NOT NULL,
-            mae REAL,
-            mfe REAL,
-            hold_minutes INTEGER NOT NULL,
-            execution_count INTEGER NOT NULL DEFAULT 0,
-            mood TEXT NOT NULL DEFAULT '🙂',
-            setup_description TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS trade_tags (
-            trade_id TEXT NOT NULL,
-            tag TEXT NOT NULL,
-            PRIMARY KEY (trade_id, tag),
-            FOREIGN KEY (trade_id) REFERENCES trades(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS trade_images (
-            id TEXT PRIMARY KEY,
-            trade_id TEXT NOT NULL,
-            relative_path TEXT NOT NULL,
-            description TEXT,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (trade_id) REFERENCES trades(id) ON DELETE CASCADE
-        );
-
         CREATE TABLE IF NOT EXISTS session_images (
             id TEXT PRIMARY KEY,
             session_id TEXT NOT NULL,
@@ -85,8 +151,7 @@ fn init_schema(conn: &Connection) -> Result<()> {
         );
         "#,
     )?;
-    ensure_trade_session_column(conn)?;
-    seed_default_tags(conn)?;
+    ensure_trade_columns(tx)?;
     Ok(())
 }
 
@@ -658,8 +723,12 @@ fn default_session_id(entry_timestamp: &str) -> String {
     format!("{}-01", Utc::now().format("%Y-%m-%d"))
 }
 
-fn ensure_trade_session_column(conn: &Connection) -> Result<()> {
-    let mut stmt = conn.prepare("PRAGMA table_info(trades)")?;
+fn ensure_trade_columns(tx: &Transaction<'_>) -> Result<()> {
+    if !table_exists(tx, "trades")? {
+        return Ok(());
+    }
+
+    let mut stmt = tx.prepare("PRAGMA table_info(trades)")?;
     let mut rows = stmt.query([])?;
     let mut columns = std::collections::HashSet::new();
     while let Some(row) = rows.next()? {
@@ -668,16 +737,16 @@ fn ensure_trade_session_column(conn: &Connection) -> Result<()> {
     }
 
     if !columns.contains("session_id") {
-        conn.execute("ALTER TABLE trades ADD COLUMN session_id TEXT NOT NULL DEFAULT ''", [])?;
+        tx.execute("ALTER TABLE trades ADD COLUMN session_id TEXT NOT NULL DEFAULT ''", [])?;
     }
     if !columns.contains("account") {
-        conn.execute("ALTER TABLE trades ADD COLUMN account TEXT NOT NULL DEFAULT ''", [])?;
+        tx.execute("ALTER TABLE trades ADD COLUMN account TEXT NOT NULL DEFAULT ''", [])?;
     }
     if !columns.contains("commission") {
-        conn.execute("ALTER TABLE trades ADD COLUMN commission REAL NOT NULL DEFAULT 0", [])?;
+        tx.execute("ALTER TABLE trades ADD COLUMN commission REAL NOT NULL DEFAULT 0", [])?;
     }
     if !columns.contains("execution_count") {
-        conn.execute("ALTER TABLE trades ADD COLUMN execution_count INTEGER NOT NULL DEFAULT 0", [])?;
+        tx.execute("ALTER TABLE trades ADD COLUMN execution_count INTEGER NOT NULL DEFAULT 0", [])?;
     }
 
     Ok(())

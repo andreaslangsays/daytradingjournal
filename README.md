@@ -47,6 +47,7 @@ Main backend areas:
 - [db.rs](/Users/andreas/Code/tradingjournal/src-tauri/src/db.rs): schema, migrations, queries, dashboard metrics
 - [archive.rs](/Users/andreas/Code/tradingjournal/src-tauri/src/archive.rs): `.trj` extract/pack and WebP conversion
 - [models.rs](/Users/andreas/Code/tradingjournal/src-tauri/src/models.rs): typed Rust models
+- [src-tauri/migrations/](/Users/andreas/Code/tradingjournal/src-tauri/migrations): schema migration scripts applied via `PRAGMA user_version`
 
 ## Portable `.trj` format
 
@@ -71,7 +72,23 @@ Save flow:
 
 1. Persist current trade, tag and settings state locally.
 2. Keep screenshots inside `images/`.
-3. Rebuild the archive to the selected `.trj` target.
+3. Checkpoint SQLite WAL pages into the main database file.
+4. Build the new archive as a temporary file in the target directory.
+5. Swap the temp archive into place atomically and only delete the backup after success.
+
+## Update safety and crash safety
+
+- SQLite schema versioning now uses `PRAGMA user_version`.
+- Schema upgrades are executed transactionally from [src-tauri/migrations/](/Users/andreas/Code/tradingjournal/src-tauri/migrations).
+- Legacy databases without `user_version` are repaired to the current schema before the version is bumped.
+- When an archive is opened and a migration is needed, the original `.trj` is copied to a timestamped backup first.
+- Saving a journal now checkpoints WAL data and replaces the destination archive with a temp-to-final swap instead of deleting the old file first.
+
+Current limits:
+
+- There is not yet a cross-process journal lock for the same `.trj` file.
+- SQLCipher-based password protection is not yet integrated.
+- Trade history virtualization and thumbnail-based list loading are still open follow-up work.
 
 ## Features
 

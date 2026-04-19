@@ -119,7 +119,17 @@ fn open_journal_from_path(app: AppHandle, state: State<JournalState>, file_path:
     let archive_path = PathBuf::from(file_path);
     let workspace = workspace_dir(&app, &state).map_err(error_to_string)?;
     archive::extract_archive(&archive_path, &workspace).map_err(error_to_string)?;
-    db::connect(&workspace.join("journal.sqlite")).map_err(error_to_string)?;
+    let db_file = workspace.join("journal.sqlite");
+    if db::database_needs_migration(&db_file).map_err(error_to_string)? {
+        archive::create_archive_backup(&archive_path).map_err(error_to_string)?;
+    }
+    let (_, migration) = db::connect_with_migrations(&db_file).map_err(error_to_string)?;
+    if migration.did_migrate {
+        println!(
+            "Opened journal with schema migration: {} -> {} (legacy_upgrade={})",
+            migration.from_version, migration.to_version, migration.used_legacy_upgrade
+        );
+    }
     *state.archive_path.lock().unwrap() = Some(archive_path.clone());
     Ok(archive_path.display().to_string())
 }
@@ -132,6 +142,8 @@ fn save_journal_to_path(app: AppHandle, state: State<JournalState>, file_path: S
     }
 
     let workspace = workspace_dir(&app, &state).map_err(error_to_string)?;
+    let conn = db::connect(&workspace.join("journal.sqlite")).map_err(error_to_string)?;
+    db::checkpoint_wal(&conn).map_err(error_to_string)?;
     archive::pack_archive(&workspace, &archive_path).map_err(error_to_string)?;
     *state.archive_path.lock().unwrap() = Some(archive_path.clone());
     Ok(archive_path.display().to_string())
