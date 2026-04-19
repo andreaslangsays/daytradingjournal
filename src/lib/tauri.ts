@@ -33,6 +33,10 @@ export async function exportCsv(filePath: string) {
   return invoke<string>("export_flat_csv", { filePath });
 }
 
+export async function exportExcel(filePath: string) {
+  return invoke<string>("export_excel", { filePath });
+}
+
 export async function getAppPreferences() {
   return invoke<AppPreferences>("get_app_preferences");
 }

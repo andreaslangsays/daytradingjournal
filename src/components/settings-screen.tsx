@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { useI18n } from "@/lib/i18n";
+import { useMemo, useState } from "react";
 import type { InstrumentFeePresets, LanguageCode, ThemeMode, TradeTag } from "@/lib/types";
-import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Input } from "./ui/input";
+import { useI18n } from "@/lib/i18n";
+import { DangerZoneSettingsSection } from "@/features/settings/components/sections/danger-zone-settings-section";
+import { FeePresetsSettingsSection } from "@/features/settings/components/sections/fee-presets-settings-section";
+import { GeneralSettingsSection } from "@/features/settings/components/sections/general-settings-section";
+import { TagCatalogSettingsSection } from "@/features/settings/components/sections/tag-catalog-settings-section";
 
 interface SettingsScreenProps {
   language: LanguageCode;
@@ -34,24 +35,16 @@ export function SettingsScreen({
 }: SettingsScreenProps) {
   const { copy } = useI18n();
   const [section, setSection] = useState<SettingsSection>("general");
-  const [draftName, setDraftName] = useState("");
-  const [draftColor, setDraftColor] = useState("#22d3ee");
-  const [confirmation, setConfirmation] = useState("");
-  const [editedTags, setEditedTags] = useState<Record<string, TradeTag>>({});
-  const [localFeePresets, setLocalFeePresets] = useState<InstrumentFeePresets>(feePresets);
 
-  useEffect(() => {
-    setLocalFeePresets(feePresets);
-  }, [feePresets]);
-
-  const sortedTags = useMemo(() => tags, [tags]);
-  const instruments = ["ES", "NQ", "MES", "MNQ", "CL", "MCL", "BTCUS"] as const;
-  const sections: Array<{ id: SettingsSection; label: string }> = [
-    { id: "general", label: copy.settings.languageTitle },
-    { id: "fees", label: copy.settings.feesTitle },
-    { id: "tags", label: copy.settings.tagsTitle },
-    { id: "system", label: copy.settings.dangerTitle },
-  ];
+  const sections = useMemo<Array<{ id: SettingsSection; label: string }>>(
+    () => [
+      { id: "general", label: copy.settings.languageTitle },
+      { id: "fees", label: copy.settings.feesTitle },
+      { id: "tags", label: copy.settings.tagsTitle },
+      { id: "system", label: copy.settings.dangerTitle },
+    ],
+    [copy.settings.dangerTitle, copy.settings.feesTitle, copy.settings.languageTitle, copy.settings.tagsTitle],
+  );
 
   return (
     <div className="grid gap-3 xl:grid-cols-[180px_minmax(0,1fr)]">
@@ -77,200 +70,24 @@ export function SettingsScreen({
 
       <div className="space-y-3">
         {section === "general" ? (
-          <Card className="shadow-none">
-            <CardHeader>
-              <div>
-                <CardDescription>{copy.settings.languageTitle}</CardDescription>
-                <CardTitle className="mt-1 text-sm">{copy.settings.languageTitle}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1.5">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{copy.settings.languageTitle}</span>
-                <select
-                  value={language}
-                  onChange={(event) => onLanguageChange(event.target.value as LanguageCode)}
-                  className="h-9 w-full rounded-[5px] border border-border bg-secondary px-3 text-[13px] text-foreground outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="de">{copy.languages.de}</option>
-                  <option value="en">{copy.languages.en}</option>
-                  <option value="es">{copy.languages.es}</option>
-                </select>
-              </label>
-
-              <div className="grid gap-1.5">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Theme</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant={theme === "light" ? "default" : "secondary"} onClick={() => onThemeChange("light")}>
-                    {copy.app.themeLight}
-                  </Button>
-                  <Button variant={theme === "dark" ? "default" : "secondary"} onClick={() => onThemeChange("dark")}>
-                    {copy.app.themeDark}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {section === "tags" ? (
-          <Card className="shadow-none">
-            <CardHeader>
-              <div>
-                <CardDescription>{copy.settings.tagsTitle}</CardDescription>
-                <CardTitle className="mt-1 text-sm">{copy.settings.tagsTitle}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_90px_110px]">
-                <Input value={draftName} onChange={(event) => setDraftName(event.target.value)} placeholder={copy.settings.newTagName} />
-                <Input type="color" value={draftColor} onChange={(event) => setDraftColor(event.target.value)} className="h-9 w-full p-1" />
-                <Button
-                  onClick={async () => {
-                    if (!draftName.trim()) return;
-                    await onSaveTag({ id: crypto.randomUUID(), name: draftName.trim(), color: draftColor });
-                    setDraftName("");
-                    setDraftColor("#22d3ee");
-                  }}
-                >
-                  {copy.settings.addTag}
-                </Button>
-              </div>
-
-              <div className="overflow-x-auto rounded-[5px] border border-border/80">
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="border-b border-border/80">
-                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide text-muted-foreground">Tag</th>
-                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide text-muted-foreground">Color</th>
-                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedTags.map((tag) => {
-                      const editable = editedTags[tag.id] ?? tag;
-                      return (
-                        <tr key={tag.id} className="border-b border-border/80">
-                          <td className="px-3 py-2">
-                            <Input
-                              value={editable.name}
-                              onChange={(event) =>
-                                setEditedTags((current) => ({
-                                  ...current,
-                                  [tag.id]: { ...editable, name: event.target.value },
-                                }))
-                              }
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <Input
-                              type="color"
-                              value={editable.color}
-                              onChange={(event) =>
-                                setEditedTags((current) => ({
-                                  ...current,
-                                  [tag.id]: { ...editable, color: event.target.value },
-                                }))
-                              }
-                              className="h-9 w-16 p-1"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex gap-2">
-                              <Button variant="secondary" onClick={() => onSaveTag(editable)}>
-                                {copy.settings.saveTag}
-                              </Button>
-                              <Button variant="ghost" onClick={() => onDeleteTag(tag.id)}>
-                                {copy.settings.deleteTag}
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+          <GeneralSettingsSection
+            language={language}
+            onLanguageChange={onLanguageChange}
+            theme={theme}
+            onThemeChange={onThemeChange}
+          />
         ) : null}
 
         {section === "fees" ? (
-          <Card className="shadow-none">
-            <CardHeader>
-              <div>
-                <CardDescription>{copy.settings.feesTitle}</CardDescription>
-                <CardTitle className="mt-1 text-sm">{copy.settings.feesTitle}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-[12px] leading-5 text-muted-foreground">{copy.settings.feesText}</p>
-              <div className="overflow-x-auto rounded-[5px] border border-border/80">
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="border-b border-border/80">
-                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide text-muted-foreground">{copy.tradeForm.instrument}</th>
-                      <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wide text-muted-foreground">{copy.settings.feeColumn}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {instruments.map((instrument) => (
-                      <tr key={instrument} className="border-b border-border/80">
-                        <td className="px-3 py-2 font-medium text-foreground">{instrument}</td>
-                        <td className="px-3 py-2">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={localFeePresets[instrument] ?? 0}
-                            onChange={(event) =>
-                              setLocalFeePresets((current) => ({
-                                ...current,
-                                [instrument]: Number(event.target.value),
-                              }))
-                            }
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex justify-end">
-                <Button onClick={() => onSaveFeePresets(localFeePresets)}>{copy.settings.saveFees}</Button>
-              </div>
-            </CardContent>
-          </Card>
+          <FeePresetsSettingsSection feePresets={feePresets} onSaveFeePresets={onSaveFeePresets} />
+        ) : null}
+
+        {section === "tags" ? (
+          <TagCatalogSettingsSection tags={tags} onDeleteTag={onDeleteTag} onSaveTag={onSaveTag} />
         ) : null}
 
         {section === "system" ? (
-          <Card className="border-danger/20 shadow-none">
-            <CardHeader>
-              <div>
-                <CardDescription>{copy.settings.dangerTitle}</CardDescription>
-                <CardTitle className="mt-1 text-sm">{copy.settings.dangerTitle}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-[12px] leading-5 text-muted-foreground">{copy.settings.dangerText}</p>
-              <label className="grid gap-1.5">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{copy.settings.confirmationLabel}</span>
-                <Input
-                  value={confirmation}
-                  onChange={(event) => setConfirmation(event.target.value)}
-                  placeholder={copy.settings.confirmationPlaceholder}
-                />
-              </label>
-              <Button
-                variant="accent"
-                onClick={async () => {
-                  await onClearJournal(confirmation);
-                  setConfirmation("");
-                }}
-              >
-                {copy.settings.clearButton}
-              </Button>
-            </CardContent>
-          </Card>
+          <DangerZoneSettingsSection onClearJournal={onClearJournal} />
         ) : null}
       </div>
     </div>

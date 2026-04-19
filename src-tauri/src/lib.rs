@@ -5,6 +5,7 @@ mod models;
 use std::{
     collections::HashMap,
     fs,
+    io::Write,
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -18,6 +19,7 @@ use rusqlite::params;
 use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
+use zip::{write::SimpleFileOptions, ZipWriter};
 
 type CommandResult<T> = std::result::Result<T, String>;
 
@@ -46,6 +48,7 @@ pub fn run() {
             preview_atas_import,
             execute_atas_import,
             export_flat_csv,
+            export_excel,
             add_trade_screenshot,
             get_app_preferences,
             save_app_preferences,
@@ -215,68 +218,299 @@ fn execute_atas_import(app: AppHandle, state: State<JournalState>, file_path: St
 fn export_flat_csv(app: AppHandle, state: State<JournalState>, file_path: String) -> CommandResult<String> {
     let conn = db::connect(&db_path(&app, &state).map_err(error_to_string)?).map_err(error_to_string)?;
     let trades = db::list_trades(&conn).map_err(error_to_string)?;
-    let target = PathBuf::from(file_path);
-    if let Some(parent) = target.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent).map_err(error_to_string)?;
-        }
-    }
+    let target = ensure_extension(PathBuf::from(file_path), "csv");
+    ensure_parent_dir(&target).map_err(error_to_string)?;
     let mut writer = WriterBuilder::new().from_path(&target).map_err(error_to_string)?;
-    writer
-        .write_record([
-            "id",
-            "session_id",
-            "account",
-            "instrument",
-            "side",
-            "entry_timestamp",
-            "exit_timestamp",
-            "entry_price",
-            "exit_price",
-            "contracts",
-            "gross_pnl",
-            "net_pnl",
-            "commission",
-            "r_multiple",
-            "mae",
-            "mfe",
-            "hold_minutes",
-            "execution_count",
-            "mood",
-            "setup_description",
-            "tags",
-        ])
-        .map_err(error_to_string)?;
+    let export = build_trade_export(&trades);
+    writer.write_record(export.headers.iter()).map_err(error_to_string)?;
 
-    for trade in trades {
+    for row in export.rows {
         writer
-            .write_record([
-                trade.id,
-                trade.session_id,
-                trade.account,
-                format!("{:?}", trade.instrument).to_uppercase(),
-                format!("{:?}", trade.side).to_uppercase(),
-                trade.entry_timestamp,
-                trade.exit_timestamp,
-                trade.entry_price.to_string(),
-                trade.exit_price.to_string(),
-                trade.contracts.to_string(),
-                trade.gross_pnl.to_string(),
-                trade.net_pnl.to_string(),
-                trade.commission.to_string(),
-                trade.r_multiple.to_string(),
-                trade.mae.unwrap_or_default().to_string(),
-                trade.mfe.unwrap_or_default().to_string(),
-                trade.hold_minutes.to_string(),
-                trade.execution_count.to_string(),
-                trade.mood,
-                trade.setup_description,
-                trade.tags.join("|"),
-            ])
+            .write_record(row.into_iter().map(|cell| cell.to_csv_string()))
             .map_err(error_to_string)?;
     }
     writer.flush().map_err(error_to_string)?;
     Ok(target.display().to_string())
+}
+
+#[tauri::command]
+fn export_excel(app: AppHandle, state: State<JournalState>, file_path: String) -> CommandResult<String> {
+    let conn = db::connect(&db_path(&app, &state).map_err(error_to_string)?).map_err(error_to_string)?;
+    let trades = db::list_trades(&conn).map_err(error_to_string)?;
+    let target = ensure_extension(PathBuf::from(file_path), "xlsx");
+    ensure_parent_dir(&target).map_err(error_to_string)?;
+
+    let export = build_trade_export(&trades);
+    let xml = build_sheet_xml(&export);
+    let file = fs::File::create(&target).map_err(error_to_string)?;
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+    write_zip_entry(&mut zip, "[Content_Types].xml", content_types_xml(), options).map_err(error_to_string)?;
+    write_zip_entry(&mut zip, "_rels/.rels", root_rels_xml(), options).map_err(error_to_string)?;
+    write_zip_entry(&mut zip, "docProps/app.xml", doc_props_app_xml(), options).map_err(error_to_string)?;
+    write_zip_entry(&mut zip, "docProps/core.xml", doc_props_core_xml(), options).map_err(error_to_string)?;
+    write_zip_entry(&mut zip, "xl/workbook.xml", workbook_xml(), options).map_err(error_to_string)?;
+    write_zip_entry(&mut zip, "xl/_rels/workbook.xml.rels", workbook_rels_xml(), options).map_err(error_to_string)?;
+    write_zip_entry(&mut zip, "xl/styles.xml", styles_xml(), options).map_err(error_to_string)?;
+    write_zip_entry(&mut zip, "xl/worksheets/sheet1.xml", &xml, options).map_err(error_to_string)?;
+
+    zip.finish().map_err(error_to_string)?;
+    Ok(target.display().to_string())
+}
+
+fn ensure_parent_dir(target: &Path) -> anyhow::Result<()> {
+    if let Some(parent) = target.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    Ok(())
+}
+
+fn ensure_extension(mut path: PathBuf, extension: &str) -> PathBuf {
+    if path.extension().and_then(|value| value.to_str()) != Some(extension) {
+        path.set_extension(extension);
+    }
+    path
+}
+
+struct TradeExport {
+    headers: Vec<&'static str>,
+    rows: Vec<Vec<ExportCell>>,
+}
+
+#[derive(Clone)]
+enum ExportCell {
+    Text(String),
+    Number(f64),
+    Integer(i64),
+    Empty,
+}
+
+impl ExportCell {
+    fn to_csv_string(self) -> String {
+        match self {
+            Self::Text(value) => value,
+            Self::Number(value) => value.to_string(),
+            Self::Integer(value) => value.to_string(),
+            Self::Empty => String::new(),
+        }
+    }
+}
+
+fn build_trade_export(trades: &[TradeRecord]) -> TradeExport {
+    let headers = vec![
+        "id",
+        "session_id",
+        "account",
+        "instrument",
+        "side",
+        "entry_timestamp",
+        "exit_timestamp",
+        "entry_price",
+        "exit_price",
+        "contracts",
+        "gross_pnl",
+        "net_pnl",
+        "commission",
+        "r_multiple",
+        "mae",
+        "mfe",
+        "hold_minutes",
+        "execution_count",
+        "mood",
+        "setup_description",
+        "tags",
+    ];
+    let rows = trades
+        .iter()
+        .map(|trade| {
+            vec![
+                ExportCell::Text(trade.id.clone()),
+                ExportCell::Text(trade.session_id.clone()),
+                ExportCell::Text(trade.account.clone()),
+                ExportCell::Text(format!("{:?}", trade.instrument).to_uppercase()),
+                ExportCell::Text(format!("{:?}", trade.side).to_uppercase()),
+                ExportCell::Text(trade.entry_timestamp.clone()),
+                ExportCell::Text(trade.exit_timestamp.clone()),
+                ExportCell::Number(trade.entry_price),
+                ExportCell::Number(trade.exit_price),
+                ExportCell::Integer(trade.contracts),
+                ExportCell::Number(trade.gross_pnl),
+                ExportCell::Number(trade.net_pnl),
+                ExportCell::Number(trade.commission),
+                ExportCell::Number(trade.r_multiple),
+                trade.mae.map_or(ExportCell::Empty, ExportCell::Number),
+                trade.mfe.map_or(ExportCell::Empty, ExportCell::Number),
+                ExportCell::Integer(trade.hold_minutes),
+                ExportCell::Integer(trade.execution_count),
+                ExportCell::Text(trade.mood.clone()),
+                ExportCell::Text(trade.setup_description.clone()),
+                ExportCell::Text(trade.tags.join("|")),
+            ]
+        })
+        .collect();
+
+    TradeExport { headers, rows }
+}
+
+fn build_sheet_xml(export: &TradeExport) -> String {
+    let mut rows = Vec::with_capacity(export.rows.len() + 1);
+    rows.push(build_excel_row(
+        1,
+        export
+            .headers
+            .iter()
+            .map(|header| ExportCell::Text((*header).to_string())),
+    ));
+
+    for (index, row) in export.rows.iter().enumerate() {
+        rows.push(build_excel_row(index + 2, row.iter().cloned()));
+    }
+
+    format!(
+        concat!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+            r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">"#,
+            r#"<sheetViews><sheetView workbookViewId="0"/></sheetViews>"#,
+            r#"<sheetFormatPr defaultRowHeight="15"/>"#,
+            r#"<sheetData>{}</sheetData>"#,
+            r#"</worksheet>"#
+        ),
+        rows.join("")
+    )
+}
+
+fn build_excel_row(row_number: usize, cells: impl IntoIterator<Item = ExportCell>) -> String {
+    let body = cells
+        .into_iter()
+        .enumerate()
+        .map(|(column_index, cell)| build_excel_cell(column_index, row_number, &cell))
+        .collect::<String>();
+    format!(r#"<row r="{row_number}">{body}</row>"#)
+}
+
+fn build_excel_cell(column_index: usize, row_number: usize, cell: &ExportCell) -> String {
+    let reference = format!("{}{}", excel_column_name(column_index), row_number);
+    match cell {
+        ExportCell::Text(value) => format!(
+            r#"<c r="{reference}" t="inlineStr"><is><t xml:space="preserve">{}</t></is></c>"#,
+            escape_xml(value)
+        ),
+        ExportCell::Number(value) => format!(r#"<c r="{reference}"><v>{value}</v></c>"#),
+        ExportCell::Integer(value) => format!(r#"<c r="{reference}"><v>{value}</v></c>"#),
+        ExportCell::Empty => format!(r#"<c r="{reference}"/>"#),
+    }
+}
+
+fn excel_column_name(mut index: usize) -> String {
+    let mut name = String::new();
+    loop {
+        name.insert(0, (b'A' + (index % 26) as u8) as char);
+        if index < 26 {
+            break;
+        }
+        index = (index / 26) - 1;
+    }
+    name
+}
+
+fn escape_xml(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+fn write_zip_entry(
+    zip: &mut ZipWriter<fs::File>,
+    path: &str,
+    content: &str,
+    options: SimpleFileOptions,
+) -> anyhow::Result<()> {
+    zip.start_file(path, options)?;
+    zip.write_all(content.as_bytes())?;
+    Ok(())
+}
+
+fn content_types_xml() -> &'static str {
+    concat!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+        r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">"#,
+        r#"<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>"#,
+        r#"<Default Extension="xml" ContentType="application/xml"/>"#,
+        r#"<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>"#,
+        r#"<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>"#,
+        r#"<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>"#,
+        r#"<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>"#,
+        r#"<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>"#,
+        r#"</Types>"#
+    )
+}
+
+fn root_rels_xml() -> &'static str {
+    concat!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#,
+        r#"<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>"#,
+        r#"<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>"#,
+        r#"<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>"#,
+        r#"</Relationships>"#
+    )
+}
+
+fn doc_props_app_xml() -> &'static str {
+    concat!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+        r#"<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">"#,
+        r#"<Application>Personal Trader Journal</Application>"#,
+        r#"</Properties>"#
+    )
+}
+
+fn doc_props_core_xml() -> &'static str {
+    concat!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+        r#"<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">"#,
+        r#"<dc:creator>Personal Trader Journal</dc:creator>"#,
+        r#"<cp:lastModifiedBy>Personal Trader Journal</cp:lastModifiedBy>"#,
+        r#"</cp:coreProperties>"#
+    )
+}
+
+fn workbook_xml() -> &'static str {
+    concat!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+        r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">"#,
+        r#"<sheets><sheet name="Trades" sheetId="1" r:id="rId1"/></sheets>"#,
+        r#"</workbook>"#
+    )
+}
+
+fn workbook_rels_xml() -> &'static str {
+    concat!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#,
+        r#"<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>"#,
+        r#"<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>"#,
+        r#"</Relationships>"#
+    )
+}
+
+fn styles_xml() -> &'static str {
+    concat!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+        r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">"#,
+        r#"<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>"#,
+        r#"<fills count="1"><fill><patternFill patternType="none"/></fill></fills>"#,
+        r#"<borders count="1"><border/></borders>"#,
+        r#"<cellStyleXfs count="1"><xf/></cellStyleXfs>"#,
+        r#"<cellXfs count="1"><xf xfId="0"/></cellXfs>"#,
+        r#"<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>"#,
+        r#"</styleSheet>"#
+    )
 }
 
 #[tauri::command]

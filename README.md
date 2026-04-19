@@ -23,11 +23,15 @@ Personal Trader Journal is an offline-first desktop application for structured t
 
 Main frontend areas:
 
-- [App.tsx](/Users/andreas/Code/tradingjournal/src/App.tsx): app orchestration, persistence, journal open/save flow
+- [App.tsx](/Users/andreas/Code/tradingjournal/src/App.tsx): thin application bootstrap and screen composition
+- [use-app-state.ts](/Users/andreas/Code/tradingjournal/src/features/app/hooks/use-app-state.ts): app lifecycle, persistence, journal open/save flow, import/export actions
 - [trade-history.tsx](/Users/andreas/Code/tradingjournal/src/components/trade-history.tsx): trade list, detail panel and fullscreen review
 - [trade-form.tsx](/Users/andreas/Code/tradingjournal/src/components/trade-form.tsx): capture and editing flow
-- [dashboard.tsx](/Users/andreas/Code/tradingjournal/src/components/dashboard.tsx): overview and statistics
-- [settings-screen.tsx](/Users/andreas/Code/tradingjournal/src/components/settings-screen.tsx): language, theme, tags, fee presets and system actions
+- [dashboard.tsx](/Users/andreas/Code/tradingjournal/src/components/dashboard.tsx): overview and statistics host for analytics UI
+- [dashboard-metrics.ts](/Users/andreas/Code/tradingjournal/src/features/analytics/domain/dashboard-metrics.ts): analytics domain calculations
+- [use-dashboard-state.ts](/Users/andreas/Code/tradingjournal/src/features/analytics/hooks/use-dashboard-state.ts): dashboard filter state and derived analytics data
+- [settings-screen.tsx](/Users/andreas/Code/tradingjournal/src/components/settings-screen.tsx): settings navigation host
+- [src/features/settings/components/sections/](/Users/andreas/Code/tradingjournal/src/features/settings/components/sections): modular settings sections for general options, fees, tags and system actions
 
 ### Backend
 
@@ -108,7 +112,7 @@ Supported presets currently include:
 
 - ATAS Excel import from `Journal`
 - Execution-aware import enrichment from `Executions`
-- CSV flat export including account, session, commission and execution count
+- CSV and Excel export including account, session, commission and execution count
 
 ## ATAS import notes
 
@@ -138,6 +142,14 @@ Imported values include:
 tradingjournal/
 ├── src/
 │   ├── components/
+│   ├── features/
+│   │   ├── analytics/
+│   │   │   ├── domain/
+│   │   │   └── hooks/
+│   │   ├── app/
+│   │   │   └── hooks/
+│   │   └── settings/
+│   │       └── components/
 │   ├── lib/
 │   ├── App.tsx
 │   └── index.css
@@ -150,6 +162,16 @@ tradingjournal/
 ├── package.json
 └── README.md
 ```
+
+## Frontend modularization status
+
+Phase 1 of the modularization is now in place:
+
+- `App.tsx` delegates workspace, persistence and journal actions to a dedicated app hook.
+- Dashboard calculations and dashboard filter state are separated from the rendering layer.
+- Settings are split into independent section components instead of one monolithic screen.
+
+This keeps current functionality intact while creating clearer seams for future plugin-style extension points for analytics panels and settings sections.
 
 ## Prerequisites
 

@@ -1,4 +1,4 @@
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { CsvPreview } from "@/lib/types";
@@ -10,13 +10,28 @@ interface CsvPanelProps {
   preview: CsvPreview | null;
   onPreview: (path: string) => Promise<void>;
   onImport: (path: string) => Promise<void>;
-  onExport: (path: string) => Promise<void>;
+  onExportCsv: (path: string) => Promise<void>;
+  onExportExcel: (path: string) => Promise<void>;
 }
 
-export function CsvPanel({ preview, onPreview, onImport, onExport }: CsvPanelProps) {
+function replaceExtension(path: string, extension: string) {
+  const trimmed = path.trim();
+  if (!trimmed) {
+    return `journal-export.${extension}`;
+  }
+
+  const lastSlash = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  const lastDot = trimmed.lastIndexOf(".");
+  if (lastDot > lastSlash) {
+    return `${trimmed.slice(0, lastDot)}.${extension}`;
+  }
+  return `${trimmed}.${extension}`;
+}
+
+export function CsvPanel({ preview, onPreview, onImport, onExportCsv, onExportExcel }: CsvPanelProps) {
   const { copy } = useI18n();
   const [csvPath, setCsvPath] = useState("");
-  const [exportPath, setExportPath] = useState("journal-export.csv");
+  const [exportPath, setExportPath] = useState("journal-export");
 
   const chooseImportFile = async () => {
     const selected = await open({
@@ -28,6 +43,43 @@ export function CsvPanel({ preview, onPreview, onImport, onExport }: CsvPanelPro
       return;
     }
     setCsvPath(selected);
+  };
+
+  const chooseExportPath = async (extension: "csv" | "xlsx") => {
+    const suggestedPath = replaceExtension(exportPath, extension);
+    const selected = await save({
+      title: copy.csv.exportSaveTitle,
+      defaultPath: suggestedPath,
+      filters: [
+        {
+          name: extension === "csv" ? "CSV" : "Excel",
+          extensions: [extension],
+        },
+      ],
+    });
+
+    if (!selected) {
+      return null;
+    }
+
+    setExportPath(selected);
+    return selected;
+  };
+
+  const handleExportCsv = async () => {
+    const selected = await chooseExportPath("csv");
+    if (!selected) {
+      return;
+    }
+    await onExportCsv(selected);
+  };
+
+  const handleExportExcel = async () => {
+    const selected = await chooseExportPath("xlsx");
+    if (!selected) {
+      return;
+    }
+    await onExportExcel(selected);
   };
 
   return (
@@ -68,7 +120,12 @@ export function CsvPanel({ preview, onPreview, onImport, onExport }: CsvPanelPro
         </CardHeader>
         <CardContent className="space-y-4">
           <Input value={exportPath} onChange={(event) => setExportPath(event.target.value)} placeholder={copy.csv.exportPlaceholder} />
-          <Button onClick={() => onExport(exportPath)}>{copy.csv.exportAll}</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void handleExportCsv()}>{copy.csv.exportCsv}</Button>
+            <Button variant="secondary" onClick={() => void handleExportExcel()}>
+              {copy.csv.exportExcel}
+            </Button>
+          </div>
           {preview ? (
             <div className="overflow-x-auto rounded-[5px] border border-border/80">
               <table className="w-full text-sm">

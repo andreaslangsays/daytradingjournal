@@ -1,46 +1,31 @@
 import { ArrowUpRight, ShieldAlert, Target, TrendingUp } from "lucide-react";
-import { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { DashboardMetrics, TradeRecord } from "@/lib/types";
 import { formatCurrency, formatPercent } from "@/lib/utils";
+import { useDashboardState } from "@/features/analytics/hooks/use-dashboard-state";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { EquityCurveChart, HeatMap, ScatterSummary } from "./charts";
 
 export function Dashboard({ trades, variant = "stats" }: { trades: TradeRecord[]; variant?: "overview" | "stats" }) {
   const { copy, locale } = useI18n();
-  const [sessionFilter, setSessionFilter] = useState("");
-  const [dayFilter, setDayFilter] = useState("");
-  const [monthFilter, setMonthFilter] = useState("");
-  const [tagFilter, setTagFilter] = useState("");
-  const [instrumentFilter, setInstrumentFilter] = useState("");
-  const [accountFilter, setAccountFilter] = useState("");
-
-  const filterOptions = useMemo(() => {
-    const sessions = Array.from(new Set(trades.map((trade) => trade.sessionId))).filter(Boolean).sort();
-    const days = Array.from(new Set(trades.map((trade) => trade.entryTimestamp.slice(0, 10)))).sort();
-    const months = Array.from(new Set(trades.map((trade) => trade.entryTimestamp.slice(0, 7)))).sort();
-    const tags = Array.from(new Set(trades.flatMap((trade) => trade.tags))).sort();
-    const instruments = Array.from(new Set(trades.map((trade) => trade.instrument))).sort();
-    const accounts = Array.from(new Set(trades.map((trade) => trade.account).filter(Boolean))).sort();
-    return { sessions, days, months, tags, instruments, accounts };
-  }, [trades]);
-
-  const filteredTrades = useMemo(
-    () =>
-      trades.filter((trade) => {
-        const matchesSession = !sessionFilter || trade.sessionId === sessionFilter;
-        const matchesDay = !dayFilter || trade.entryTimestamp.slice(0, 10) === dayFilter;
-        const matchesMonth = !monthFilter || trade.entryTimestamp.slice(0, 7) === monthFilter;
-        const matchesTag = !tagFilter || trade.tags.includes(tagFilter);
-        const matchesInstrument = !instrumentFilter || trade.instrument === instrumentFilter;
-        const matchesAccount = !accountFilter || trade.account === accountFilter;
-        return matchesSession && matchesDay && matchesMonth && matchesTag && matchesInstrument && matchesAccount;
-      }),
-    [accountFilter, dayFilter, instrumentFilter, monthFilter, sessionFilter, tagFilter, trades],
-  );
-
-  const metrics = useMemo(() => buildMetrics(filteredTrades), [filteredTrades]);
+  const {
+    accountFilter,
+    dayFilter,
+    filterOptions,
+    filteredTrades,
+    instrumentFilter,
+    metrics,
+    monthFilter,
+    sessionFilter,
+    tagFilter,
+    setAccountFilter,
+    setDayFilter,
+    setInstrumentFilter,
+    setMonthFilter,
+    setSessionFilter,
+    setTagFilter,
+  } = useDashboardState(trades);
 
   const topTag = metrics.tagStats[0];
   const topTime = [...metrics.weekdayHeatmap].sort((left, right) => right.value - left.value)[0];
@@ -315,67 +300,6 @@ function StatisticsGrid({
       </div>
     </div>
   );
-}
-
-function buildMetrics(trades: TradeRecord[]): DashboardMetrics {
-  const tradeCount = trades.length;
-  const wins = trades.filter((trade) => trade.netPnl > 0);
-  const losses = trades.filter((trade) => trade.netPnl < 0);
-  const grossProfit = wins.reduce((sum, trade) => sum + trade.netPnl, 0);
-  const grossLoss = losses.reduce((sum, trade) => sum + Math.abs(trade.netPnl), 0);
-  const totalPnl = trades.reduce((sum, trade) => sum + trade.netPnl, 0);
-
-  let running = 0;
-  let peak = 0;
-  let maxDrawdown = 0;
-  const chronological = [...trades].sort((a, b) => a.exitTimestamp.localeCompare(b.exitTimestamp));
-  const equityCurve = chronological.map((trade) => {
-    running += trade.netPnl;
-    peak = Math.max(peak, running);
-    maxDrawdown = Math.min(maxDrawdown, running - peak);
-    return { label: trade.exitTimestamp, balance: running };
-  });
-
-  const weekdayHeatmap = Array.from(
-    trades.reduce((map, trade) => {
-      const date = new Date(trade.entryTimestamp);
-      const label = `${date.toLocaleDateString("en-US", { weekday: "short" })} ${String(date.getHours()).padStart(2, "0")}:00`;
-      map.set(label, (map.get(label) ?? 0) + trade.netPnl);
-      return map;
-    }, new Map<string, number>()),
-  )
-    .map(([bucket, value]) => ({ bucket, value }))
-    .slice(0, 12);
-
-  const tagStats = Array.from(
-    trades.reduce((map, trade) => {
-      for (const tag of trade.tags) {
-        const current = map.get(tag) ?? { label: tag, count: 0, pnl: 0 };
-        current.count += 1;
-        current.pnl += trade.netPnl;
-        map.set(tag, current);
-      }
-      return map;
-    }, new Map<string, { label: string; count: number; pnl: number }>()),
-  )
-    .map(([, value]) => value)
-    .sort((left, right) => right.count - left.count)
-    .slice(0, 8);
-
-  return {
-    accountBalance: totalPnl,
-    equityCurve,
-    winRate: tradeCount === 0 ? 0 : (wins.length / tradeCount) * 100,
-    averageWin: wins.length === 0 ? 0 : grossProfit / wins.length,
-    averageLoss: losses.length === 0 ? 0 : -grossLoss / losses.length,
-    profitFactor: grossLoss === 0 ? grossProfit : grossProfit / grossLoss,
-    expectancy: tradeCount === 0 ? 0 : totalPnl / tradeCount,
-    tradeCount,
-    maxDrawdown,
-    maeMfe: trades.map((trade) => ({ tradeId: trade.id, mae: trade.mae ?? 0, mfe: trade.mfe ?? 0, pnl: trade.netPnl })),
-    weekdayHeatmap,
-    tagStats,
-  };
 }
 
 function FilterSelect({
